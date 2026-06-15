@@ -285,10 +285,36 @@ def callback_inline(call):
         user_data.setdefault(chat_id, {})["photo_skipped"] = True
         bot.clear_step_handler_by_chat_id(chat_id)
         get_photo(call.message)
+# ==========================================
+# تشغيل سيرفر Flask المخصص لمنصة Render
+# ==========================================
+from flask import Flask
+from threading import Thread
+import os
 
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "سيرفر البوت يعمل بنجاح على منصة Render! 🚀"
+
+def run_server():
+    # منصة Render تفرض قراءة المنفذ تلقائياً عبر متغير بيئي، وإلا نستخدم 10000 كافتراضي
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive_secure():
+    t = Thread(target=run_server)
+    t.daemon = True  # لضمان استقرار الخيط البرمجي في الخلفية
+    t.start()
+
+# ==========================================
+# نقطة الانطلاق الحاسمة للبوت (Polling)
+# ==========================================
 if __name__ == "__main__":
-    keep_alive()
-    print("====================================")
-    print("السيرفر المصغر مستعد للعمل على منصة Render بنجاح! 🚀")
-    print("====================================")
-    bot.infinity_polling()
+    print("⏳ جاري تهيئة سيرفر الويب لمنصة Render...")
+    keep_alive_secure()
+    
+    print("🚀 البوت مستعد الآن ويستقبل الرسائل بنظام Polling المستقر...")
+    # تشغيل البوت بالاستعلام اللانهائي الذكي لإصلاح أي انقطاع فوراً
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
