@@ -6,12 +6,12 @@ import telebot
 from telebot import types
 import requests
 
-# 1. إعداد سيرفر ويب متوافق مع Render لمنع توقف البوت
+# 1. إعداد سيرفر الويب المتوافق مع Render لمنع توقف البوت
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "البوت يعمل بكفاءة ملوكية ودائمة على سيرفر Render! 🚀"
+    return "السيرفر الملوكي يعمل بكفاءة استثنائية! 🚀"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -30,12 +30,10 @@ DEFAULT_RIGHTS = "تم التعديل بأعلى كفاءة بواسطة  @Mp3_E
 bot = telebot.TeleBot(TOKEN)
 user_data = {}
 
-# دالة للتحقق مما إذا كانت الرسالة تحتوي على رابط ويب (URL)
 def is_url(text):
     url_pattern = re.compile(r'https?://(?:www\.)?\S+')
     return bool(url_pattern.search(text))
 
-# دالة التحقق اللحظي من الاشتراك الإجباري
 def check_sub(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -88,16 +86,17 @@ def send_welcome(message):
         "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
     )
 
-# دالة التحميل الذكية القائمة على نظام البدائل المتعددة لتفادي أي انقطاع
+# دالة التحميل الذكية القائمة على موازنة الأحمال والبدائل الفائقة الاستقرار
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
     
-    status_msg = bot.reply_to(message, "جاري معالجة وتجهيز الملف الفخم عبر نظام السيرفرات البديلة المتعددة... ⏳")
+    status_msg = bot.reply_to(message, "جاري فحص الرابط ومعالجته عبر مصفوفة السيرفرات السحابية... ⏳")
     
-    # قائمة خوادم الـ API العالمية المتاحة للمعالجة كبدائل سريعة
+    # شبكة من أقوى خوادم الاستخراج العالمية المحدثة لعام 2026 لتخطي جدران الحماية
     endpoints = [
         {"url": "https://api.cobalt.tools/api/json", "type": "json_post"},
+        {"url": "https://cobalt.api.v07.me/api/json", "type": "json_post"},
         {"url": "https://co.wuk.sh/api/json", "type": "json_post"},
         {"url": "https://api.v07.me/api/yt?url=", "type": "get_param"}
     ]
@@ -105,23 +104,26 @@ def handle_url_download(message):
     download_link = None
     title = "صوت مستخرج فخم"
     
-    # محاولة الاتصال بالخوادم واحداً تلو الآخر حتى ينجح أحدهم
     for endpoint in endpoints:
         try:
             if endpoint["type"] == "json_post":
-                headers = {"Accept": "application/json", "Content-Type": "application/json"}
+                headers = {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                }
                 payload = {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}
-                response = requests.post(endpoint["url"], json=payload, headers=headers, timeout=10)
+                response = requests.post(endpoint["url"], json=payload, headers=headers, timeout=12)
                 
                 if response.status_code == 200:
                     data = response.json()
-                    if "url" in data or data.get("status") == "stream":
+                    if "url" in data:
                         download_link = data["url"]
                         title = data.get("filename", title)
                         break
             
             elif endpoint["type"] == "get_param":
-                response = requests.get(f"{endpoint['url']}{url}", timeout=10)
+                response = requests.get(f"{endpoint['url']}{url}", timeout=12)
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("status") and "mp3" in data:
@@ -129,15 +131,15 @@ def handle_url_download(message):
                         title = data.get("title", title)
                         break
         except Exception:
-            continue  # إذا فشل خادم، ننتقل تلقائياً وبصمت للخادم الذي يليه
+            continue
             
-    # التحقق من نجاح أحد البدائل في استخراج رابط التحميل
     if download_link:
         try:
             title = os.path.splitext(title)[0]
-            bot.edit_message_text("جاري الآن رفع الصوت المستخرج الفخم إلى تيليجرام... 🚀", chat_id, status_msg.message_id)
+            bot.edit_message_text("جاري استلام الملف الصوتي ورفعه إلى تيليجرام بأعلى جودة... 🚀", chat_id, status_msg.message_id)
             
-            audio_response = requests.get(download_link, stream=True, timeout=120)
+            # زيادة مهلة الاتصال والرفع (timeout) لتفادي خطأ قطع الاتصال نهائياً
+            audio_response = requests.get(download_link, stream=True, timeout=180)
             if audio_response.status_code == 200:
                 bot.send_audio(
                     chat_id=chat_id,
@@ -145,17 +147,16 @@ def handle_url_download(message):
                     title=title,
                     performer=DEFAULT_RIGHTS,
                     caption=f"✅ تم التحميل بنجاح بواسطة البوت الملوكي\n👉 {DEFAULT_RIGHTS}",
-                    timeout=120
+                    timeout=240
                 )
                 bot.delete_message(chat_id, status_msg.message_id)
             else:
-                bot.edit_message_text("❌ عذراً، خادم الرفع واجه مشكلة أثناء إرسال الملف. حاول مجدداً.", chat_id, status_msg.message_id)
+                bot.edit_message_text("❌ واجه خادم الرفع مشكلة مؤقتة في نقل البيانات. يرجى المحاولة مرة أخرى.", chat_id, status_msg.message_id)
         except Exception as e:
-            bot.edit_message_text(f"❌ حدث خطأ أثناء الرفع إلى تيليجرام: {str(e)}", chat_id, status_msg.message_id)
+            bot.edit_message_text(f"❌ حدث خطأ أثناء بث الملف لتيليجرام: {str(e)}", chat_id, status_msg.message_id)
     else:
-        bot.edit_message_text("❌ جميع خوادم التحويل العالمية مشغولة حالياً أو الرابط غير مدعوم، يرجى المحاولة مرة أخرى لاحقاً.", chat_id, status_msg.message_id)
+        bot.edit_message_text("❌ جميع قنوات المعالجة مشغولة أو الرابط يخضع لقيود صارمة من المصدر. يرجى تجربة رابط آخر أو المحاولة لاحقاً.", chat_id, status_msg.message_id)
 
-# معالج النصوص الذكي: يميز تلقائياً بين الروابط والـ Text العادي الخاص بالخطوات
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
     chat_id = message.chat.id
@@ -291,10 +292,11 @@ def get_photo(message):
         file_info = bot.get_file(raw_file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
-        with requests.get(file_url, stream=True) as r:
+        # زيادة الحماية الزمنية وفتح مخرجات التدفق التدريجي لتجنب انقطاع الكتابة
+        with requests.get(file_url, stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(audio_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
+                for chunk in r.iter_content(chunk_size=16384):
                     f.write(chunk)
 
         has_photo = False
@@ -320,7 +322,7 @@ def get_photo(message):
                         performer=final_artist,
                         thumb=thumb_file,
                         caption=caption_text,
-                        timeout=120
+                        timeout=240
                     )
             else:
                 bot.send_audio(
@@ -329,7 +331,7 @@ def get_photo(message):
                     title=final_title,
                     performer=final_artist,
                     caption=caption_text,
-                    timeout=120
+                    timeout=240
                 )
 
         if os.path.exists(audio_path): os.remove(audio_path)
@@ -337,7 +339,7 @@ def get_photo(message):
         if chat_id in user_data: user_data.pop(chat_id)
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ حدث خطأ غير متوقع: {str(e)}")
+        bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة: {str(e)}\nيرجى إعادة المحاولة.")
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
 
@@ -372,21 +374,15 @@ def callback_inline(call):
         bot.clear_step_handler_by_chat_id(chat_id)
         get_photo(call.message)
 
-# ==========================================
-# تشغيل سيرفر Flask المخصص لمنصة Render
-# ==========================================
 def keep_alive_secure():
     port = int(os.environ.get("PORT", 10000))
     t = Thread(target=lambda: app.run(host='0.0.0.0', port=port))
     t.daemon = True
     t.start()
 
-# ==========================================
-# نقطة الانطلاق الحاسمة للبوت (Polling)
-# ==========================================
 if __name__ == "__main__":
-    print("⏳ جاري تهيئة سيرفر الويب لمنصة Render...")
+    print("⏳ جاري تهيئة سيرفر الويب الملوكي لمنصة Render...")
     keep_alive_secure()
     
-    print("🚀 البوت مستعد الآن ويعمل بنظام البدائل التلقائية الذكية...")
-    bot.infinity_polling(timeout=20, long_polling_timeout=10)
+    print("🚀 البوت مستعد تماماً الآن ومحصن ضد الانقطاع...")
+    bot.infinity_polling(timeout=30, long_polling_timeout=15)
