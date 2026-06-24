@@ -88,24 +88,24 @@ def send_welcome(message):
         "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
     )
 
-# دالة التحميل المحدثة باستخدام خوادم Cobalt العالمية الفخمة والمستقرة
+# دالة التحميل المحدثة باستخدام خادم معالجة فائق السرعة وبدون قيود
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
     
-    status_msg = bot.reply_to(message, "جاري معالجة الرابط عبر خوادم متطورة وسريعة جداً... انتظر ثوانٍ ⏳")
+    status_msg = bot.reply_to(message, "جاري معالجة وتجهيز الملف الفخم عبر نظام السيرفرات البديلة... انتظر ثوانٍ ⏳")
     
-    # إعداد الطلب لنظام Cobalt المخصص لاستخراج الصوت بجودة احترافية عالية
-    api_url = "https://api.cobalt.tools/api/json"
+    # استخدام خادم تحويل مخصص ومستقر لتخطي الحظر والقيود كلياً
+    api_url = "https://co.wuk.sh/api/json"
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
     payload = {
         "url": url,
-        "downloadMode": "audio",  # استخراج الصوت فقط بدقة عالية جداً
-        "audioFormat": "mp3",     # جلب الملف بصيغة mp3 مباشرة
-        "audioBitrate": "320"     # أعلى جودة صوتية ممكنة
+        "downloadMode": "audio",
+        "audioFormat": "mp3",
+        "audioBitrate": "320"
     }
     
     try:
@@ -114,16 +114,13 @@ def handle_url_download(message):
         if response.status_code == 200:
             data = response.json()
             
-            # التحقق من حالة الملف وتوفر رابط التحميل المباشر
             if data.get("status") == "stream" or "url" in data:
                 download_link = data["url"]
-                # محاولة جلب العنوان أو تسميته باسم فخم افتراضي
                 title = data.get("filename", "صوت مستخرج فخم")
-                title = os.path.splitext(title)[0] # إزالة الامتداد من النص لو وجد
+                title = os.path.splitext(title)[0]
                 
-                bot.edit_message_text("جاري الآن رفع الصوت الملوكي المستخرج إلى تيليجرام... 🚀", chat_id, status_msg.message_id)
+                bot.edit_message_text("جاري الآن رفع الصوت المستخرج الفخم إلى تيليجرام... 🚀", chat_id, status_msg.message_id)
                 
-                # تحميل الملف بصيغة Stream ملوكية ورفعه مباشرة لحماية ذاكرة السيرفر
                 audio_response = requests.get(download_link, stream=True, timeout=120)
                 if audio_response.status_code == 200:
                     bot.send_audio(
@@ -136,16 +133,16 @@ def handle_url_download(message):
                     )
                     bot.delete_message(chat_id, status_msg.message_id)
                 else:
-                    bot.edit_message_text("❌ تعذر تحميل الملف الصوتي من خادم المعالجة الأساسي.", chat_id, status_msg.message_id)
+                    bot.edit_message_text("❌ تعذر تحميل الملف الصوتي من خادم المعالجة. يرجى المحاولة لاحقاً.", chat_id, status_msg.message_id)
             elif data.get("status") == "error":
-                bot.edit_message_text(f"❌ خطأ من خادم التحويل: {data.get('error', 'الرابط غير مدعوم أو محمي')}", chat_id, status_msg.message_id)
+                bot.edit_message_text(f"❌ خطأ من خادم المعالجة: {data.get('error', 'الرابط غير مدعوم حالياً')}", chat_id, status_msg.message_id)
             else:
-                bot.edit_message_text("❌ لم نتمكن من معالجة هذا الرابط حالياً، تأكد من صحته.", chat_id, status_msg.message_id)
+                bot.edit_message_text("❌ لم يتمكن النظام من قراءة الرابط، تأكد من صحته وجرب مجدداً.", chat_id, status_msg.message_id)
         else:
-            bot.edit_message_text("❌ خوادم التحويل العالمية مشغولة حالياً، يرجى إعادة المحاولة بعد دقيقة.", chat_id, status_msg.message_id)
+            bot.edit_message_text("❌ نظام التحويل يواجه ضغطاً مؤقتاً، يرجى المحاولة مرة أخرى خلال لحظات.", chat_id, status_msg.message_id)
             
     except Exception as e:
-        bot.edit_message_text(f"❌ حدث خطأ أثناء الاتصال بالخادم الذكي: {str(e)}\nيرجى التحقق من الرابط لاحقاً.", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدث خطأ أثناء الاتصال بالنظام الذكي: {str(e)}\nيرجى إعادة المحاولة لاحقاً.", chat_id, status_msg.message_id)
 
 # معالج النصوص الذكي: يميز تلقائياً بين الروابط والـ Text العادي الخاص بالخطوات
 @bot.message_handler(content_types=["text"])
@@ -380,5 +377,5 @@ if __name__ == "__main__":
     print("⏳ جاري تهيئة سيرفر الويب لمنصة Render...")
     keep_alive_secure()
     
-    print("🚀 البوت مستعد الآن ويستقبل الرسائل عبر نظام Cobalt العالمي...")
+    print("🚀 البوت مستعد الآن ويستقبل الرسائل عبر نظام التحويل المستقر والحر...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
