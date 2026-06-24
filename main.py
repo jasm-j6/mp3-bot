@@ -1,9 +1,11 @@
 import os
+import re
 from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
 import requests
+import yt_dlp  # المكتبة الجديدة للتحميل
 
 # 1. إعداد سيرفر ويب متوافق مع Render لمنع توقف البوت
 app = Flask("")
@@ -13,21 +15,26 @@ def home():
     return "البوت يعمل بكفاءة ملوكية ودائمة على سيرفر Render! 🚀"
 
 def run_web_server():
-    # Render يمرر المنفذ تلقائياً عبر متغير بيئة، وإلا نستخدم 10000 كافتراضي
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 def keep_alive():
     t = Thread(target=run_web_server)
+    t.daemon = True
     t.start()
 
 # 2. الإعدادات الأساسية للبوت
 TOKEN = "8889690063:AAFgia5rX0Ac2wFWRFxFSlITgSUHOaaKU4g"
-CHANNEL_USERNAME = "@qafia2"  # تم تعديل المعرف ليكون قياسياً بالـ @ لضمان عمل الفحص
+CHANNEL_USERNAME = "@qafia2"
 DEFAULT_RIGHTS = "تم التعديل بأعلى كفاءة بواسطة  @Mp3_EdBot 🎵"
 
 bot = telebot.TeleBot(TOKEN)
 user_data = {}
+
+# دالة للتحقق مما إذا كانت الرسالة تحتوي على رابط ويب (URL)
+def is_url(text):
+    url_pattern = re.compile(r'https?://(?:www\.)?\S+')
+    return bool(url_pattern.search(text))
 
 # دالة التحقق اللحظي من الاشتراك الإجباري
 def check_sub(user_id):
@@ -37,7 +44,6 @@ def check_sub(user_id):
             return True
         return False
     except Exception:
-        # في حال حدوث خطأ برمي (مثلاً البوت ليس مشرفاً)، يمرر الإجراء كأمان للمستخدم
         return True
 
 def send_sub_msg(chat_id):
@@ -63,7 +69,7 @@ def cancel_action(message):
         user_data.pop(chat_id)
     bot.reply_to(
         message,
-        "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي جديد في أي وقت.",
+        "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي أو رابط جديد في أي وقت.",
     )
 
 @bot.message_handler(commands=["start", "help"])
@@ -75,13 +81,77 @@ def send_welcome(message):
 
     bot.reply_to(
         message,
-        "أهلاً بك في بوت تعديل الصوتيات المحترف! 🎵\n\n"
+        "أهلاً بك في بوت تعديل وتحميل الصوتيات المحترف! 🎵\n\n"
         "💡 **طريقة الاستخدام:**\n"
-        "1- أرسل لي أي ملف صوتي (MP3).\n"
-        "2- تفاعل مع الأزرار الشفافة لتعديل الحقوق والغلاف.\n"
+        "1- **لتعديل ملفك:** أرسل لي أي ملف صوتي (MP3) ثم تفاعل مع الأزرار الشفافة.\n"
+        "2- **للتحميل من رابط:** أرسل لي رابط الويب مباشرة (يوتيوب، فيسبوك، إلخ) وسأقوم باستخراج الصوت فوراً!\n"
         "3- لإلغاء العملية في أي وقت أرسل الأمر /cancel .\n\n"
-        "أرسل ملفك الآن لنبدأ فوراً!",
+        "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
     )
+
+# دالة معالجة الروابط المباشرة (النسخة المستقرة والآمنة جداً على رندر)
+def handle_url_download(message):
+    chat_id = message.chat.id
+    url = message.text.strip()
+    
+    status_msg = bot.reply_to(message, "جاري معالجة وتجهيز الملف الفخم من الرابط... انتظر ثوانٍ معدودة ⏳")
+    
+    file_id = f"dl_{chat_id}_{int(os.getpid())}"
+    output_template = f"{file_id}.%(ext)s"
+    
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': output_template,
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            
+        if os.path.exists(filename):
+            bot.edit_message_text("جاري رفع الملف الفخم المستخرج إلى تيليجرام الآن... 🚀", chat_id, status_msg.message_id)
+            
+            with open(filename, "rb") as audio_file:
+                bot.send_audio(
+                    chat_id=chat_id,
+                    audio=audio_file,
+                    title=info.get('title', 'صوت مستخرج فخم'),
+                    performer=DEFAULT_RIGHTS,
+                    caption=f"✅ تم التحميل بنجاح بواسطة البوت الملوكي\n👉 {DEFAULT_RIGHTS}",
+                    timeout=120  # حل مشكلة الـ Timeout تماماً بزيادة المهلة لـ دقيقتين
+                )
+            bot.delete_message(chat_id, status_msg.message_id)
+        else:
+            bot.edit_message_text("❌ عذراً، تعذر استخراج الصوت من هذا الرابط. تأكد من صلاحية الرابط.", chat_id, status_msg.message_id)
+            
+    except Exception as e:
+        bot.edit_message_text(f"❌ حدث خطأ أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
+        
+    finally:
+        # (The Cleaner) تنظيف فوري وشامل لأي ملف يحمل الـ id الخاص بالعملية لحماية الـ RAM والقرص
+        for f in os.listdir('.'):
+            if f.startswith(file_id):
+                try:
+                    os.remove(f)
+                except Exception:
+                    pass
+
+# معالج النصوص الذكي: يميز تلقائياً بين الروابط والـ Text العادي الخاص بالخطوات
+@bot.message_handler(content_types=["text"])
+def handle_text(message):
+    chat_id = message.chat.id
+    if not check_sub(message.from_user.id):
+        send_sub_msg(chat_id)
+        return
+        
+    if is_url(message.text):
+        handle_url_download(message)
+    else:
+        # إذا لم يكن رابطاً، نتركه ليعالج النصوص القادمة من الـ register_next_step_handler بشكل طبيعي
+        pass
 
 @bot.message_handler(content_types=["audio", "document"])
 def handle_audio(message):
@@ -97,7 +167,7 @@ def handle_audio(message):
         file_info = message.document
 
     if not file_info:
-        bot.reply_to(message, "الرجاء أرسل ملف صوتي صالح! ❌")
+        bot.reply_to(message, "الرجاء أرسل ملف صوتی صالح! ❌")
         return
 
     user_data[chat_id] = {
@@ -116,7 +186,6 @@ def handle_audio(message):
     )
     bot.register_next_step_handler(msg, get_title)
 
-# حماية الخطوات القادمة بالتحقق اللحظي الصارم من غياب الاشتراك
 def get_title(message):
     chat_id = message.chat.id
     if message.text == "/cancel":
@@ -236,6 +305,7 @@ def get_photo(message):
                         performer=final_artist,
                         thumb=thumb_file,
                         caption=caption_text,
+                        timeout=120  # زيادة مهلة الرفع للملفات المعدلة أيضاً تفادياً لأي فصل
                     )
             else:
                 bot.send_audio(
@@ -244,6 +314,7 @@ def get_photo(message):
                     title=final_title,
                     performer=final_artist,
                     caption=caption_text,
+                    timeout=120
                 )
 
         if os.path.exists(audio_path): os.remove(audio_path)
@@ -262,7 +333,7 @@ def callback_inline(call):
         if check_sub(call.from_user.id):
             bot.answer_callback_query(call.id, "تم تأكيد الاشتراك بنجاح! 🎉")
             bot.delete_message(chat_id, call.message.message_id)
-            bot.send_message(chat_id, "شكرًا لانضمامك! أرسل الآن الملف الصوتي لبدء التعديل 🎵")
+            bot.send_message(chat_id, "شكرًا لانضمامك! أرسل الآن الملف الصوتي أو الرابط لبدء العمل 🎵")
         else:
             bot.answer_callback_query(call.id, "❌ لم تشترك في القناة بعد، رجاءً اشترك واضغط مجدداً.", show_alert=True)
     elif call.data == "skip_title":
@@ -285,27 +356,14 @@ def callback_inline(call):
         user_data.setdefault(chat_id, {})["photo_skipped"] = True
         bot.clear_step_handler_by_chat_id(chat_id)
         get_photo(call.message)
+
 # ==========================================
 # تشغيل سيرفر Flask المخصص لمنصة Render
 # ==========================================
-from flask import Flask
-from threading import Thread
-import os
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "سيرفر البوت يعمل بنجاح على منصة Render! 🚀"
-
-def run_server():
-    # منصة Render تفرض قراءة المنفذ تلقائياً عبر متغير بيئي، وإلا نستخدم 10000 كافتراضي
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
 def keep_alive_secure():
-    t = Thread(target=run_server)
-    t.daemon = True  # لضمان استقرار الخيط البرمجي في الخلفية
+    port = int(os.environ.get("PORT", 10000))
+    t = Thread(target=lambda: app.run(host='0.0.0.0', port=port))
+    t.daemon = True
     t.start()
 
 # ==========================================
@@ -315,6 +373,5 @@ if __name__ == "__main__":
     print("⏳ جاري تهيئة سيرفر الويب لمنصة Render...")
     keep_alive_secure()
     
-    print("🚀 البوت مستعد الآن ويستقبل الرسائل بنظام Polling المستقر...")
-    # تشغيل البوت بالاستعلام اللانهائي الذكي لإصلاح أي انقطاع فوراً
+    print("🚀 البوت مستعد الآن ويستقبل الرسائل والروابط بنظام Polling المستقر...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
