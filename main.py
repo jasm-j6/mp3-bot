@@ -5,7 +5,6 @@ from flask import Flask
 import telebot
 from telebot import types
 import requests
-import yt_dlp  # المكتبة الجديدة للتحميل
 
 # 1. إعداد سيرفر ويب متوافق مع Render لمنع توقف البوت
 app = Flask("")
@@ -89,55 +88,48 @@ def send_welcome(message):
         "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
     )
 
-# دالة معالجة الروابط المباشرة (النسخة المستقرة والآمنة جداً على رندر)
+# دالة التحميل المحدثة والذكية لتخطي حظر يوتيوب تماماً عبر استخدام API خارجي
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
     
-    status_msg = bot.reply_to(message, "جاري معالجة وتجهيز الملف الفخم من الرابط... انتظر ثوانٍ معدودة ⏳")
+    status_msg = bot.reply_to(message, "جاري معالجة وتجهيز الملف الفخم عبر النظام البديل الآمن... انتظر ثوانٍ ⏳")
     
-    file_id = f"dl_{chat_id}_{int(os.getpid())}"
-    output_template = f"{file_id}.%(ext)s"
-    
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': output_template,
-        'quiet': True,
-        'no_warnings': True,
-    }
+    # استخدام نظام API بديل ومستقر لتحويل الروابط بكفاءة عالية وتجاوز حظر الـ IP
+    api_url = f"https://api.v07.me/api/yt?url={url}"
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+        response = requests.get(api_url, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
             
-        if os.path.exists(filename):
-            bot.edit_message_text("جاري رفع الملف الفخم المستخرج إلى تيليجرام الآن... 🚀", chat_id, status_msg.message_id)
-            
-            with open(filename, "rb") as audio_file:
-                bot.send_audio(
-                    chat_id=chat_id,
-                    audio=audio_file,
-                    title=info.get('title', 'صوت مستخرج فخم'),
-                    performer=DEFAULT_RIGHTS,
-                    caption=f"✅ تم التحميل بنجاح بواسطة البوت الملوكي\n👉 {DEFAULT_RIGHTS}",
-                    timeout=120  # حل مشكلة الـ Timeout تماماً بزيادة المهلة لـ دقيقتين
-                )
-            bot.delete_message(chat_id, status_msg.message_id)
+            if data.get("status") and "mp3" in data:
+                download_link = data["mp3"]
+                title = data.get("title", "صوت مستخرج فخم")
+                
+                bot.edit_message_text("جاري رفع الصوت المستخرج الفخم إلى تيليجرام الآن... 🚀", chat_id, status_msg.message_id)
+                
+                # تحميل الملف ورفعه مباشرة بدون تخزين مجهد على السيرفر المحلي لـ Render
+                audio_response = requests.get(download_link, stream=True, timeout=120)
+                if audio_response.status_code == 200:
+                    bot.send_audio(
+                        chat_id=chat_id,
+                        audio=audio_response.raw,
+                        title=title,
+                        performer=DEFAULT_RIGHTS,
+                        caption=f"✅ تم التحميل بنجاح بواسطة البوت الملوكي\n👉 {DEFAULT_RIGHTS}",
+                        timeout=120
+                    )
+                    bot.delete_message(chat_id, status_msg.message_id)
+                else:
+                    bot.edit_message_text("❌ عذراً، فشل تحميل الملف الصوتي من خادم التحويل المساعد.", chat_id, status_msg.message_id)
+            else:
+                bot.edit_message_text("❌ النظام لم يتمكن من معالجة هذا الرابط حالياً، تأكد من صحة الرابط أو جرب رابطاً آخر.", chat_id, status_msg.message_id)
         else:
-            bot.edit_message_text("❌ عذراً، تعذر استخراج الصوت من هذا الرابط. تأكد من صلاحية الرابط.", chat_id, status_msg.message_id)
+            bot.edit_message_text("❌ عذراً، خادم التحويل المساعد مشغول حالياً. يرجى المحاولة بعد قليل.", chat_id, status_msg.message_id)
             
     except Exception as e:
-        bot.edit_message_text(f"❌ حدث خطأ أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
-        
-    finally:
-        # (The Cleaner) تنظيف فوري وشامل لأي ملف يحمل الـ id الخاص بالعملية لحماية الـ RAM والقرص
-        for f in os.listdir('.'):
-            if f.startswith(file_id):
-                try:
-                    os.remove(f)
-                except Exception:
-                    pass
+        bot.edit_message_text(f"❌ حدث خطأ أثناء المعالجة الذكية: {str(e)}", chat_id, status_msg.message_id)
 
 # معالج النصوص الذكي: يميز تلقائياً بين الروابط والـ Text العادي الخاص بالخطوات
 @bot.message_handler(content_types=["text"])
@@ -150,7 +142,6 @@ def handle_text(message):
     if is_url(message.text):
         handle_url_download(message)
     else:
-        # إذا لم يكن رابطاً، نتركه ليعالج النصوص القادمة من الـ register_next_step_handler بشكل طبيعي
         pass
 
 @bot.message_handler(content_types=["audio", "document"])
@@ -305,7 +296,7 @@ def get_photo(message):
                         performer=final_artist,
                         thumb=thumb_file,
                         caption=caption_text,
-                        timeout=120  # زيادة مهلة الرفع للملفات المعدلة أيضاً تفادياً لأي فصل
+                        timeout=120
                     )
             else:
                 bot.send_audio(
@@ -373,5 +364,5 @@ if __name__ == "__main__":
     print("⏳ جاري تهيئة سيرفر الويب لمنصة Render...")
     keep_alive_secure()
     
-    print("🚀 البوت مستعد الآن ويستقبل الرسائل والروابط بنظام Polling المستقر...")
+    print("🚀 البوت مستعد الآن ويستقبل الرسائل والروابط بنظام الأمان الاحترافي...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
