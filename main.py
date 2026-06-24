@@ -5,13 +5,14 @@ from flask import Flask
 import telebot
 from telebot import types
 import requests
+import yt_dlp
 
 # 1. إعداد سيرفر الويب المتوافق مع Render لمنع توقف البوت
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "السيرفر الملوكي يعمل بكفاءة استثنائية! 🚀"
+    return "السيرفر الملوكي الخفيف يعمل بأعلى كفاءة وبدون استهلاك للموارد! 🚀"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -78,84 +79,76 @@ def send_welcome(message):
 
     bot.reply_to(
         message,
-        "أهلاً بك في بوت تعديل وتحميل الصوتيات المحترف! 🎵\n\n"
+        "أهلاً بك في بوت تعديل وتحميل الصوتيات المحترف الخفيف! 🎵\n\n"
         "💡 **طريقة الاستخدام:**\n"
         "1- **لتعديل ملفك:** أرسل لي أي ملف صوتي (MP3) ثم تفاعل مع الأزرار الشفافة.\n"
-        "2- **للتحميل من رابط:** أرسل لي رابط الويب مباشرة (يوتيوب، فيسبوك، إلخ) وسأقوم باستخراج الصوت فوراً!\n"
+        "2- **للتحميل من رابط:** أرسل لي رابط الويب مباشرة (يوتيوب، شورتس، إلخ) وسأقوم باستخراج الصوت فوراً!\n"
         "3- لإلغاء العملية في أي وقت أرسل الأمر /cancel .\n\n"
         "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
     )
 
-# دالة التحميل الذكية القائمة على موازنة الأحمال والبدائل الفائقة الاستقرار
+# دالة استخراج روابط الصوت المباشرة بدون تحميل الملف داخلياً (استهلاك صفر للرام)
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
     
-    status_msg = bot.reply_to(message, "جاري فحص الرابط ومعالجته عبر مصفوفة السيرفرات السحابية... ⏳")
+    status_msg = bot.reply_to(message, "جاري استخراج الرابط المباشر للصوت بنظام التمرير السريع... ⏳")
     
-    # شبكة من أقوى خوادم الاستخراج العالمية المحدثة لعام 2026 لتخطي جدران الحماية
-    endpoints = [
-        {"url": "https://api.cobalt.tools/api/json", "type": "json_post"},
-        {"url": "https://cobalt.api.v07.me/api/json", "type": "json_post"},
-        {"url": "https://co.wuk.sh/api/json", "type": "json_post"},
-        {"url": "https://api.v07.me/api/yt?url=", "type": "get_param"}
-    ]
+    # إعدادات الملحق الخفيف لجلب البيانات الوصفية والروابط فقط دون تحميل الفيديوهات
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'quiet': True,
+        'no_warnings': True,
+        'skip_download': True, # حاسم جداً لمنع التنزيل داخل السيرفر
+        'source_address': '0.0.0.0',
+        'nocheckcertificate': True,
+    }
     
-    download_link = None
-    title = "صوت مستخرج فخم"
-    
-    for endpoint in endpoints:
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            download_link = info.get('url')
+            title = info.get('title', 'صوت مستخرج فخم')
+            
+        if download_link:
+            bot.edit_message_text("جاري توجيه تيليجرام لجلب الصوت المباشر... 🚀", chat_id, status_msg.message_id)
+            
+            # إرسال الصوت عبر رابط مباشر (Stream) دون تنزيله في سيرفر Render
+            bot.send_audio(
+                chat_id=chat_id,
+                audio=download_link,
+                title=title,
+                performer=DEFAULT_RIGHTS,
+                caption=f"✅ تم استخراج وتحميل الصوت بنجاح\n👉 {DEFAULT_RIGHTS}",
+                timeout=120
+            )
+            bot.delete_message(chat_id, status_msg.message_id)
+        else:
+            bot.edit_message_text("❌ لم نتمكن من العثور على رابط صوتي مباشر لهذا الرابط.", chat_id, status_msg.message_id)
+            
+    except Exception as e:
+        # نظام البديل التلقائي في حال فشل yt-dlp محلياً بسبب قيود IP السيرفر
+        bot.edit_message_text("⏳ جاري الانتقال لخادم التحويل البديل لتخطي الحظر المستجد...", chat_id, status_msg.message_id)
         try:
-            if endpoint["type"] == "json_post":
-                headers = {
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                }
-                payload = {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}
-                response = requests.post(endpoint["url"], json=payload, headers=headers, timeout=12)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if "url" in data:
-                        download_link = data["url"]
-                        title = data.get("filename", title)
-                        break
+            endpoint = "https://api.cobalt.tools/api/json"
+            headers = {"Accept": "application/json", "Content-Type": "application/json"}
+            payload = {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=15)
             
-            elif endpoint["type"] == "get_param":
-                response = requests.get(f"{endpoint['url']}{url}", timeout=12)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("status") and "mp3" in data:
-                        download_link = data["mp3"]
-                        title = data.get("title", title)
-                        break
-        except Exception:
-            continue
-            
-    if download_link:
-        try:
-            title = os.path.splitext(title)[0]
-            bot.edit_message_text("جاري استلام الملف الصوتي ورفعه إلى تيليجرام بأعلى جودة... 🚀", chat_id, status_msg.message_id)
-            
-            # زيادة مهلة الاتصال والرفع (timeout) لتفادي خطأ قطع الاتصال نهائياً
-            audio_response = requests.get(download_link, stream=True, timeout=180)
-            if audio_response.status_code == 200:
+            if response.status_code == 200 and "url" in response.json():
                 bot.send_audio(
                     chat_id=chat_id,
-                    audio=audio_response.raw,
-                    title=title,
+                    audio=response.json()["url"],
+                    title="صوت مستخرج بديل",
                     performer=DEFAULT_RIGHTS,
-                    caption=f"✅ تم التحميل بنجاح بواسطة البوت الملوكي\n👉 {DEFAULT_RIGHTS}",
-                    timeout=240
+                    caption=f"✅ تم التحميل عبر الخادم البديل\n👉 {DEFAULT_RIGHTS}",
+                    timeout=120
                 )
                 bot.delete_message(chat_id, status_msg.message_id)
             else:
-                bot.edit_message_text("❌ واجه خادم الرفع مشكلة مؤقتة في نقل البيانات. يرجى المحاولة مرة أخرى.", chat_id, status_msg.message_id)
-        except Exception as e:
-            bot.edit_message_text(f"❌ حدث خطأ أثناء بث الملف لتيليجرام: {str(e)}", chat_id, status_msg.message_id)
-    else:
-        bot.edit_message_text("❌ جميع قنوات المعالجة مشغولة أو الرابط يخضع لقيود صارمة من المصدر. يرجى تجربة رابط آخر أو المحاولة لاحقاً.", chat_id, status_msg.message_id)
+                bot.edit_message_text("❌ هذا الرابط يخضع لحماية مشددة من يوتيوب حالياً. يرجى تجربة رابط آخر.", chat_id, status_msg.message_id)
+        except Exception:
+            bot.edit_message_text("❌ عذراً، تعذر معالجة الرابط بسبب جدار حماية المنصة المصدر.", chat_id, status_msg.message_id)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -292,7 +285,6 @@ def get_photo(message):
         file_info = bot.get_file(raw_file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
-        # زيادة الحماية الزمنية وفتح مخرجات التدفق التدريجي لتجنب انقطاع الكتابة
         with requests.get(file_url, stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(audio_path, "wb") as f:
@@ -322,7 +314,7 @@ def get_photo(message):
                         performer=final_artist,
                         thumb=thumb_file,
                         caption=caption_text,
-                        timeout=240
+                        timeout=180
                     )
             else:
                 bot.send_audio(
@@ -331,7 +323,7 @@ def get_photo(message):
                     title=final_title,
                     performer=final_artist,
                     caption=caption_text,
-                    timeout=240
+                    timeout=180
                 )
 
         if os.path.exists(audio_path): os.remove(audio_path)
@@ -381,8 +373,8 @@ def keep_alive_secure():
     t.start()
 
 if __name__ == "__main__":
-    print("⏳ جاري تهيئة سيرفر الويب الملوكي لمنصة Render...")
+    print("⏳ جاري تهيئة سيرفر الويب الملوكي المستقر...")
     keep_alive_secure()
     
-    print("🚀 البوت مستعد تماماً الآن ومحصن ضد الانقطاع...")
+    print("🚀 البوت مستعد تماماً الآن ويعمل بأقل استهلاك ممكن للموارد...")
     bot.infinity_polling(timeout=30, long_polling_timeout=15)
