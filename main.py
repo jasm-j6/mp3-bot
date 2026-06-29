@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 from threading import Thread
 from flask import Flask
 import telebot
@@ -11,7 +12,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "سيرفر البوت يعمل بأعلى معايير الاستقرار البرمجي من Google! 🚀"
+    return "سيرفر البوت يعمل بأعلى معايير الأمان والاستقرار البرمجي! 🛡️🚀"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -22,7 +23,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 2. الإعدادات الأساسية للبوت
+# 2. جلب التوكن بشكل آمن ومحمي من البيئة المحيطة (Environment Variable)
 TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_USERNAME = "@qafia2"
 DEFAULT_RIGHTS = "تم التعديل بأعلى كفاءة بواسطة  @Mp3_EdBot 🎵"
@@ -66,39 +67,42 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "أهلاً بك في النسخة المستقرة والمطورة هندسياً للبوت! 🎵\n\n"
+        "أهلاً بك في النسخة المستقرة والمؤمنة بالكامل! 🎵🛡️\n\n"
         "💡 **الميزات الحالية:**\n"
         "1- **تعديل الملفات:** أرسل ملفك الـ MP3 مباشرة وعدل بوستره وحقوقه بسلاسة تامة.\n"
         "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، أو أي منصة وسيتم استخراج الصوت فوراً لتجنب الحظر.\n\n"
         "أرسل ما لديك الآن لنبدأ فوراً!",
     )
 
-# مصفوفة خوادم الاستخراج المتطورة والمحدثة لتخطي قيود الـ IP
+# دالة الاستخراج الحديدية المحدثة لتخطي حظر يوتيوب الصارم
 def fetch_audio_from_matrix(url):
-    apis = [
-        {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}},
-        {"url": "https://cobalt.api.v07.me/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}},
-        {"url": "https://co.wuk.sh/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}},
-        {"url": f"https://api.doubledown.com/api/yt?url={url}", "method": "GET", "payload": None}
+    command = [
+        "yt-dlp",
+        "-g",
+        "-f", "bestaudio",
+        "--no-warnings",
+        "--no-check-certificate",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        url
     ]
-    
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
+        if result.returncode == 0:
+            direct_url = result.stdout.strip().split('\n')[0]
+            return direct_url, "صوت مستخرج فخم.mp3"
+    except Exception:
+        pass
+        
+    apis = [
+        {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3"}},
+        {"url": "https://co.wuk.sh/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}}
+    ]
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
     for api in apis:
         try:
-            if api["method"] == "POST":
-                res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=10)
-            else:
-                res = requests.get(api["url"], headers=headers, timeout=10)
-                
-            if res.status_code == 200:
-                data = res.json()
-                if "url" in data:
-                    return data["url"], data.get("filename", "صوت مستخرج فخم")
+            res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=8)
+            if res.status_code == 200 and "url" in res.json():
+                return res.json()["url"], res.json().get("filename", "audio.mp3")
         except Exception:
             continue
     return None, None
@@ -106,29 +110,28 @@ def fetch_audio_from_matrix(url):
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
-    status_msg = bot.reply_to(message, "جاري معالجة الرابط عبر مصفوفة السيرفرات السحابية لتخطي الحظر... ⏳")
+    status_msg = bot.reply_to(message, "جاري استخراج الرابط المباشر بأعلى كفاءة برمجية... ⏳")
     
     direct_link, filename = fetch_audio_from_matrix(url)
     
     if direct_link:
         try:
-            bot.edit_message_text("تم تخطي الحظر بنجاح! جاري إرسال الملف الصوتي الفخم... 🚀", chat_id, status_msg.message_id)
+            bot.edit_message_text("تم معالجة الرابط! جاري إرسال الصوت... 🚀", chat_id, status_msg.message_id)
             title = os.path.splitext(filename)[0] if filename else "صوت مستخرج فخم"
             
-            # تمرير الرابط مباشرة لتيليجرام لتجنب استهلاك الرام في سيرفرك تماماً
             bot.send_audio(
                 chat_id=chat_id,
                 audio=direct_link,
                 title=title,
                 performer=DEFAULT_RIGHTS,
-                caption=f"✅ تم استخراج الصوت بنجاح بدون استهلاك موارد السيرفر\n👉 {DEFAULT_RIGHTS}",
-                timeout=300 # مهلة رفع طويلة وآمنة للغاية
+                caption=f"✅ تم استخراج الصوت بنجاح\n👉 {DEFAULT_RIGHTS}",
+                timeout=300
             )
             bot.delete_message(chat_id, status_msg.message_id)
         except Exception as e:
-            bot.edit_message_text(f"❌ نجح استخراج الرابط ولكن فشل تيليجرام في رفعه: {str(e)}", chat_id, status_msg.message_id)
+            bot.edit_message_text(f"❌ نجح الاستخراج ولكن تيليجرام واجه قيداً في الرفع: {str(e)}", chat_id, status_msg.message_id)
     else:
-        bot.edit_message_text("❌ واجهت خوادم الاستخراج قيوداً صارمة من المنصة المصدر حالياً. يرجى تجربة رابط آخر أو المحاولة لاحقاً.", chat_id, status_msg.message_id)
+        bot.edit_message_text("❌ لم نتمكن من تجاوز حماية الرابط حالياً، يرجى تجربة رابط آخر.", chat_id, status_msg.message_id)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -217,11 +220,10 @@ def get_photo(message):
         file_info = bot.get_file(raw_file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
-        # التطبيق العملي لهندسة البث والتدفق التدريجي (Streaming) لمنع خطأ الكتابة والذاكرة تماماً
         with requests.get(file_url, stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(audio_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=16384): # قراءة أجزاء صغيرة 16KB
+                for chunk in r.iter_content(chunk_size=16384):
                     f.write(chunk)
 
         has_photo = False
@@ -237,6 +239,11 @@ def get_photo(message):
         final_artist = user_data[chat_id]["artist"] if user_data[chat_id].get("artist") else user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
 
+        # التحقق من حجم الملف لمنع الـ Crash في حال تعدت الحدود القصوى لتيليجرام
+        if os.path.exists(audio_path) and os.path.getsize(audio_path) > 49 * 1024 * 1024:
+            bot.send_message(chat_id, "⚠️ الملف الصوتي بعد التجميع تجاوز حد الـ 50 ميجابايت المسموح به من تيليجرام، يرجى تجربة ملف أصغر.")
+            raise Exception("File size limit exceeded")
+
         with open(audio_path, "rb") as audio_file:
             if has_photo and os.path.exists(photo_path):
                 with open(photo_path, "rb") as thumb_file:
@@ -249,7 +256,8 @@ def get_photo(message):
         if chat_id in user_data: user_data.pop(chat_id)
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة.")
+        if "limit exceeded" not in str(e):
+            bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة.")
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
 
@@ -281,6 +289,6 @@ def callback_inline(call):
         get_photo(call.message)
 
 if __name__ == "__main__":
-    print("⏳ تهيئة النظام ومصفوفة الحماية...")
+    print("⏳ تهيئة النظام ومصفوفة الحماية الآمنة...")
     keep_alive()
     bot.infinity_polling(timeout=40, long_polling_timeout=20)
