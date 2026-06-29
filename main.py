@@ -1,6 +1,5 @@
 import os
 import re
-import subprocess
 from threading import Thread
 from flask import Flask
 import telebot
@@ -70,53 +69,50 @@ def send_welcome(message):
         "أهلاً بك في النسخة المستقرة والمؤمنة بالكامل! 🎵🛡️\n\n"
         "💡 **الميزات الحالية:**\n"
         "1- **تعديل الملفات:** أرسل ملفك الـ MP3 مباشرة وعدل بوستره وحقوقه بسلاسة تامة.\n"
-        "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، أو أي منصة وسيتم استخراج الصوت فوراً لتجنب الحظر.\n\n"
+        "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، تيك توك، وسيتم استخراج الصوت فوراً لتجنب الحظر.\n\n"
         "أرسل ما لديك الآن لنبدأ فوراً!",
     )
 
-# دالة الاستخراج الحديدية المحدثة لتخطي حظر يوتيوب الصارم
+# دالة الاستخراج المتطورة والمحدثة بمصفوفة حماية سحابية جديدة ومقاومة للحظر
 def fetch_audio_from_matrix(url):
-    command = [
-        "yt-dlp",
-        "-g",
-        "-f", "bestaudio",
-        "--no-warnings",
-        "--no-check-certificate",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        url
-    ]
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
-        if result.returncode == 0:
-            direct_url = result.stdout.strip().split('\n')[0]
-            return direct_url, "صوت مستخرج فخم.mp3"
-    except Exception:
-        pass
-        
     apis = [
+        {"url": "https://api.download.is/api/json", "method": "POST", "payload": {"url": url, "service": "youtube", "format": "mp3"}},
         {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3"}},
         {"url": "https://co.wuk.sh/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}}
     ]
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    headers = {
+        "Accept": "application/json", 
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
     for api in apis:
         try:
-            res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=8)
-            if res.status_code == 200 and "url" in res.json():
-                return res.json()["url"], res.json().get("filename", "audio.mp3")
+            if "tiktok.com" in url and api["url"] == "https://api.download.is/api/json":
+                api["payload"]["service"] = "tiktok"
+                
+            res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                if "url" in data:
+                    return data["url"], data.get("filename", "audio.mp3")
+                elif "link" in data:
+                    return data["link"], data.get("title", "audio") + ".mp3"
         except Exception:
             continue
+            
     return None, None
 
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
-    status_msg = bot.reply_to(message, "جاري استخراج الرابط المباشر بأعلى كفاءة برمجية... ⏳")
+    status_msg = bot.reply_to(message, "جاري معالجة الرابط عبر مصفوفة العبور الآمن... ⏳")
     
     direct_link, filename = fetch_audio_from_matrix(url)
     
     if direct_link:
         try:
-            bot.edit_message_text("تم معالجة الرابط! جاري إرسال الصوت... 🚀", chat_id, status_msg.message_id)
+            bot.edit_message_text("تم فك التشفير بنجاح! جاري إرسال الملف الصوتي... 🚀", chat_id, status_msg.message_id)
             title = os.path.splitext(filename)[0] if filename else "صوت مستخرج فخم"
             
             bot.send_audio(
@@ -131,7 +127,17 @@ def handle_url_download(message):
         except Exception as e:
             bot.edit_message_text(f"❌ نجح الاستخراج ولكن تيليجرام واجه قيداً في الرفع: {str(e)}", chat_id, status_msg.message_id)
     else:
-        bot.edit_message_text("❌ لم نتمكن من تجاوز حماية الرابط حالياً، يرجى تجربة رابط آخر.", chat_id, status_msg.message_id)
+        bot.edit_message_text("❌ واجهت جدران الحماية قيوداً صارمة من المنصة المصدر، يرجى تجربة رابط آخر لاحقاً.", chat_id, status_msg.message_id)
+
+@bot.message_handler(commands=["clean"])
+def clean_unused_files(message):
+    # دالة صيانة لتنظيف السيرفر يدوياً إذا لزم الأمر
+    chat_id = message.chat.id
+    audio_path = f"final_{chat_id}.mp3"
+    photo_path = f"thumb_{chat_id}.jpg"
+    if os.path.exists(audio_path): os.remove(audio_path)
+    if os.path.exists(photo_path): os.remove(photo_path)
+    bot.reply_to(message, "تمت صيانة وتنظيف الملفات المؤقتة بنجاح 🧹")
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -239,7 +245,6 @@ def get_photo(message):
         final_artist = user_data[chat_id]["artist"] if user_data[chat_id].get("artist") else user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
 
-        # التحقق من حجم الملف لمنع الـ Crash في حال تعدت الحدود القصوى لتيليجرام
         if os.path.exists(audio_path) and os.path.getsize(audio_path) > 49 * 1024 * 1024:
             bot.send_message(chat_id, "⚠️ الملف الصوتي بعد التجميع تجاوز حد الـ 50 ميجابايت المسموح به من تيليجرام، يرجى تجربة ملف أصغر.")
             raise Exception("File size limit exceeded")
