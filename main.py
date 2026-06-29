@@ -5,14 +5,13 @@ from flask import Flask
 import telebot
 from telebot import types
 import requests
-import yt_dlp
 
-# 1. إعداد سيرفر الويب المتوافق مع Render لمنع توقف البوت
+# 1. إعداد خادم الويب الخفيف لمنع نوم السيرفر على Render
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "السيرفر الملوكي الخفيف يعمل بأعلى كفاءة وبدون استهلاك للموارد! 🚀"
+    return "سيرفر البوت يعمل بأعلى معايير الاستقرار البرمجي من Google! 🚀"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -38,22 +37,14 @@ def is_url(text):
 def check_sub(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        if member.status in ["member", "administrator", "creator"]:
-            return True
-        return False
+        return member.status in ["member", "administrator", "creator"]
     except Exception:
         return True
 
 def send_sub_msg(chat_id):
     markup = types.InlineKeyboardMarkup()
-    btn_link = types.InlineKeyboardButton(
-        "Anjoin القناة 📢", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"
-    )
-    btn_check = types.InlineKeyboardButton(
-        "التحقق من الاشتراك ✅", callback_data="check_subscription"
-    )
-    markup.add(btn_link)
-    markup.add(btn_check)
+    markup.add(types.InlineKeyboardButton("انضمام للقناة 📢", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"))
+    markup.add(types.InlineKeyboardButton("التحقق من الاشتراك ✅", callback_data="check_subscription"))
     bot.send_message(
         chat_id,
         f"⚠️ عذراً عزيزي، يجب عليك الاشتراك في قناة البوت أولاً لاستخدام الميزات الملوكية:\n\n{CHANNEL_USERNAME}\n\nاشترك ثم اضغط على زر التحقق بالأسفل 👇",
@@ -65,10 +56,7 @@ def cancel_action(message):
     chat_id = message.chat.id
     if chat_id in user_data:
         user_data.pop(chat_id)
-    bot.reply_to(
-        message,
-        "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي أو رابط جديد في أي وقت.",
-    )
+    bot.reply_to(message, "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي أو رابط جديد في أي وقت.")
 
 @bot.message_handler(commands=["start", "help"])
 def send_welcome(message):
@@ -76,91 +64,79 @@ def send_welcome(message):
     if not check_sub(message.from_user.id):
         send_sub_msg(chat_id)
         return
-
     bot.reply_to(
         message,
-        "أهلاً بك في بوت تعديل وتحميل الصوتيات المحترف الخفيف! 🎵\n\n"
-        "💡 **طريقة الاستخدام:**\n"
-        "1- **لتعديل ملفك:** أرسل لي أي ملف صوتي (MP3) ثم تفاعل مع الأزرار الشفافة.\n"
-        "2- **للتحميل من رابط:** أرسل لي رابط الويب مباشرة (يوتيوب، شورتس، إلخ) وسأقوم باستخراج الصوت فوراً!\n"
-        "3- لإلغاء العملية في أي وقت أرسل الأمر /cancel .\n\n"
-        "أرسل ملفك أو الرابط الآن لنبدأ فوراً!",
+        "أهلاً بك في النسخة المستقرة والمطورة هندسياً للبوت! 🎵\n\n"
+        "💡 **الميزات الحالية:**\n"
+        "1- **تعديل الملفات:** أرسل ملفك الـ MP3 مباشرة وعدل بوستره وحقوقه بسلاسة تامة.\n"
+        "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، أو أي منصة وسيتم استخراج الصوت فوراً لتجنب الحظر.\n\n"
+        "أرسل ما لديك الآن لنبدأ فوراً!",
     )
 
-# دالة استخراج روابط الصوت المباشرة بدون تحميل الملف داخلياً (استهلاك صفر للرام)
+# مصفوفة خوادم الاستخراج المتطورة والمحدثة لتخطي قيود الـ IP
+def fetch_audio_from_matrix(url):
+    apis = [
+        {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}},
+        {"url": "https://cobalt.api.v07.me/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}},
+        {"url": "https://co.wuk.sh/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}},
+        {"url": f"https://api.doubledown.com/api/yt?url={url}", "method": "GET", "payload": None}
+    ]
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    
+    for api in apis:
+        try:
+            if api["method"] == "POST":
+                res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=10)
+            else:
+                res = requests.get(api["url"], headers=headers, timeout=10)
+                
+            if res.status_code == 200:
+                data = res.json()
+                if "url" in data:
+                    return data["url"], data.get("filename", "صوت مستخرج فخم")
+        except Exception:
+            continue
+    return None, None
+
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
+    status_msg = bot.reply_to(message, "جاري معالجة الرابط عبر مصفوفة السيرفرات السحابية لتخطي الحظر... ⏳")
     
-    status_msg = bot.reply_to(message, "جاري استخراج الرابط المباشر للصوت بنظام التمرير السريع... ⏳")
+    direct_link, filename = fetch_audio_from_matrix(url)
     
-    # إعدادات الملحق الخفيف لجلب البيانات الوصفية والروابط فقط دون تحميل الفيديوهات
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-        'no_warnings': True,
-        'skip_download': True, # حاسم جداً لمنع التنزيل داخل السيرفر
-        'source_address': '0.0.0.0',
-        'nocheckcertificate': True,
-    }
-    
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            download_link = info.get('url')
-            title = info.get('title', 'صوت مستخرج فخم')
+    if direct_link:
+        try:
+            bot.edit_message_text("تم تخطي الحظر بنجاح! جاري إرسال الملف الصوتي الفخم... 🚀", chat_id, status_msg.message_id)
+            title = os.path.splitext(filename)[0] if filename else "صوت مستخرج فخم"
             
-        if download_link:
-            bot.edit_message_text("جاري توجيه تيليجرام لجلب الصوت المباشر... 🚀", chat_id, status_msg.message_id)
-            
-            # إرسال الصوت عبر رابط مباشر (Stream) دون تنزيله في سيرفر Render
+            # تمرير الرابط مباشرة لتيليجرام لتجنب استهلاك الرام في سيرفرك تماماً
             bot.send_audio(
                 chat_id=chat_id,
-                audio=download_link,
+                audio=direct_link,
                 title=title,
                 performer=DEFAULT_RIGHTS,
-                caption=f"✅ تم استخراج وتحميل الصوت بنجاح\n👉 {DEFAULT_RIGHTS}",
-                timeout=120
+                caption=f"✅ تم استخراج الصوت بنجاح بدون استهلاك موارد السيرفر\n👉 {DEFAULT_RIGHTS}",
+                timeout=300 # مهلة رفع طويلة وآمنة للغاية
             )
             bot.delete_message(chat_id, status_msg.message_id)
-        else:
-            bot.edit_message_text("❌ لم نتمكن من العثور على رابط صوتي مباشر لهذا الرابط.", chat_id, status_msg.message_id)
-            
-    except Exception as e:
-        # نظام البديل التلقائي في حال فشل yt-dlp محلياً بسبب قيود IP السيرفر
-        bot.edit_message_text("⏳ جاري الانتقال لخادم التحويل البديل لتخطي الحظر المستجد...", chat_id, status_msg.message_id)
-        try:
-            endpoint = "https://api.cobalt.tools/api/json"
-            headers = {"Accept": "application/json", "Content-Type": "application/json"}
-            payload = {"url": url, "downloadMode": "audio", "audioFormat": "mp3", "audioBitrate": "320"}
-            response = requests.post(endpoint, json=payload, headers=headers, timeout=15)
-            
-            if response.status_code == 200 and "url" in response.json():
-                bot.send_audio(
-                    chat_id=chat_id,
-                    audio=response.json()["url"],
-                    title="صوت مستخرج بديل",
-                    performer=DEFAULT_RIGHTS,
-                    caption=f"✅ تم التحميل عبر الخادم البديل\n👉 {DEFAULT_RIGHTS}",
-                    timeout=120
-                )
-                bot.delete_message(chat_id, status_msg.message_id)
-            else:
-                bot.edit_message_text("❌ هذا الرابط يخضع لحماية مشددة من يوتيوب حالياً. يرجى تجربة رابط آخر.", chat_id, status_msg.message_id)
-        except Exception:
-            bot.edit_message_text("❌ عذراً، تعذر معالجة الرابط بسبب جدار حماية المنصة المصدر.", chat_id, status_msg.message_id)
+        except Exception as e:
+            bot.edit_message_text(f"❌ نجح استخراج الرابط ولكن فشل تيليجرام في رفعه: {str(e)}", chat_id, status_msg.message_id)
+    else:
+        bot.edit_message_text("❌ واجهت خوادم الاستخراج قيوداً صارمة من المنصة المصدر حالياً. يرجى تجربة رابط آخر أو المحاولة لاحقاً.", chat_id, status_msg.message_id)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
-    chat_id = message.chat.id
     if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
+        send_sub_msg(message.chat.id)
         return
-        
     if is_url(message.text):
         handle_url_download(message)
-    else:
-        pass
 
 @bot.message_handler(content_types=["audio", "document"])
 def handle_audio(message):
@@ -187,96 +163,52 @@ def handle_audio(message):
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("تخطي والإبقاء على الأصل ⏭️", callback_data="skip_title"))
-
-    msg = bot.send_message(
-        chat_id,
-        "وصل الملف بنجاح! ✅\n\nأرسل الآن **العنوان الجديد** للملف، أو اضغط على زر التخطي بالأسفل:\n(لإلغاء العملية أرسل /cancel)",
-        reply_markup=markup,
-    )
+    msg = bot.send_message(chat_id, "وصل الملف بنجاح! ✅\n\nأرسل الآن **العنوان الجديد** للملف، أو اضغط تخطي:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_title)
 
 def get_title(message):
     chat_id = message.chat.id
-    if message.text == "/cancel":
-        return
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
-        return
-
-    if "title" not in user_data.get(chat_id, {}):
-        user_data.setdefault(chat_id, {})["title"] = message.text
+    if message.text == "/cancel" or not check_sub(message.from_user.id): return
+    if "title" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["title"] = message.text
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("تخطي وإبقاء الأصل ⏭️", callback_data="skip_artist"))
-    msg = bot.send_message(
-        chat_id,
-        "ممتاز! الآن أرسل **اسم الفنان (المطرب)**، أو اضغط على زر التخطي:",
-        reply_markup=markup,
-    )
+    msg = bot.send_message(chat_id, "ممتاز! الآن أرسل **اسم الفنان (المطرب)**، أو اضغط تخطي:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_artist)
 
 def get_artist(message):
     chat_id = message.chat.id
-    if message.text == "/cancel":
-        return
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
-        return
-
-    if "artist" not in user_data.get(chat_id, {}):
-        user_data.setdefault(chat_id, {})["artist"] = message.text
+    if message.text == "/cancel" or not check_sub(message.from_user.id): return
+    if "artist" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["artist"] = message.text
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("استخدام الحقوق الافتراضية 📝", callback_data="skip_desc"))
-    msg = bot.send_message(
-        chat_id,
-        "رائع! الآن أرسل **الوصف أو الحقوق**، أو اضغط على الزر لاستخدام الحقوق الافتراضية:",
-        reply_markup=markup,
-    )
+    msg = bot.send_message(chat_id, "رائع! الآن أرسل **الوصف أو الحقوق**، أو اضغط الزر للحقوق الافتراضية:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_description)
 
 def get_description(message):
     chat_id = message.chat.id
-    if message.text == "/cancel":
-        return
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
-        return
-
-    if "desc" not in user_data.get(chat_id, {}):
-        user_data.setdefault(chat_id, {})["desc"] = message.text
+    if message.text == "/cancel" or not check_sub(message.from_user.id): return
+    if "desc" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["desc"] = message.text
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
-    msg = bot.send_message(
-        chat_id,
-        "أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي لتوليد الملف بدون بوستر:",
-        reply_markup=markup,
-    )
+    msg = bot.send_message(chat_id, "أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_photo)
 
 def get_photo(message):
     chat_id = message.chat.id
-    if message.text == "/cancel":
-        return
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
-        return
+    if message.text == "/cancel" or not check_sub(message.from_user.id): return
 
     is_skipped = "photo_skipped" in user_data.get(chat_id, {})
-
     if message.content_type != "photo" and not is_skipped:
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
-        bot.send_message(
-            chat_id,
-            "الرجاء إرسال صورة صالحة أو الضغط على زر التخطي:",
-            reply_markup=markup,
-        )
+        bot.send_message(chat_id, "الرجاء إرسال صورة صالحة أو الضغط على زر التخطي:", reply_markup=markup)
         bot.register_next_step_handler(message, get_photo)
         return
 
-    bot.send_message(chat_id, "جاري معالجة وتجهيز الملف الفخم... انتظر ثوانٍ معدودة ⏳")
+    bot.send_message(chat_id, "جاري معالجة وتجهيز الملف بنظام التدفق الذكي... انتظر ثوانٍ ⏳")
     audio_path = f"final_{chat_id}.mp3"
     photo_path = f"thumb_{chat_id}.jpg"
 
@@ -285,10 +217,11 @@ def get_photo(message):
         file_info = bot.get_file(raw_file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
+        # التطبيق العملي لهندسة البث والتدفق التدريجي (Streaming) لمنع خطأ الكتابة والذاكرة تماماً
         with requests.get(file_url, stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(audio_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=16384):
+                for chunk in r.iter_content(chunk_size=16384): # قراءة أجزاء صغيرة 16KB
                     f.write(chunk)
 
         has_photo = False
@@ -307,31 +240,16 @@ def get_photo(message):
         with open(audio_path, "rb") as audio_file:
             if has_photo and os.path.exists(photo_path):
                 with open(photo_path, "rb") as thumb_file:
-                    bot.send_audio(
-                        chat_id=chat_id,
-                        audio=audio_file,
-                        title=final_title,
-                        performer=final_artist,
-                        thumb=thumb_file,
-                        caption=caption_text,
-                        timeout=180
-                    )
+                    bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, thumb=thumb_file, caption=caption_text, timeout=300)
             else:
-                bot.send_audio(
-                    chat_id=chat_id,
-                    audio=audio_file,
-                    title=final_title,
-                    performer=final_artist,
-                    caption=caption_text,
-                    timeout=180
-                )
+                bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, caption=caption_text, timeout=300)
 
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
         if chat_id in user_data: user_data.pop(chat_id)
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة: {str(e)}\nيرجى إعادة المحاولة.")
+        bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة.")
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
 
@@ -342,39 +260,27 @@ def callback_inline(call):
         if check_sub(call.from_user.id):
             bot.answer_callback_query(call.id, "تم تأكيد الاشتراك بنجاح! 🎉")
             bot.delete_message(chat_id, call.message.message_id)
-            bot.send_message(chat_id, "شكرًا لانضمامك! أرسل الآن الملف الصوتي أو الرابط لبدء العمل 🎵")
+            bot.send_message(chat_id, "أرسل الآن الملف الصوتي أو الرابط لبدء العمل الفوري 🎵")
         else:
-            bot.answer_callback_query(call.id, "❌ لم تشترك في القناة بعد، رجاءً اشترك واضغط مجدداً.", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ لم تشترك في القناة بعد.", show_alert=True)
     elif call.data == "skip_title":
-        bot.answer_callback_query(call.id, "تم التخطي")
         user_data.setdefault(chat_id, {})["title"] = None
         bot.clear_step_handler_by_chat_id(chat_id)
         get_title(call.message)
     elif call.data == "skip_artist":
-        bot.answer_callback_query(call.id, "تم التخطي")
         user_data.setdefault(chat_id, {})["artist"] = None
         bot.clear_step_handler_by_chat_id(chat_id)
         get_artist(call.message)
     elif call.data == "skip_desc":
-        bot.answer_callback_query(call.id, "تم تطبيق الحقوق الافتراضية")
         user_data.setdefault(chat_id, {})["desc"] = None
         bot.clear_step_handler_by_chat_id(chat_id)
         get_description(call.message)
     elif call.data == "skip_photo":
-        bot.answer_callback_query(call.id, "تم التخطي بدون بوستر")
         user_data.setdefault(chat_id, {})["photo_skipped"] = True
         bot.clear_step_handler_by_chat_id(chat_id)
         get_photo(call.message)
 
-def keep_alive_secure():
-    port = int(os.environ.get("PORT", 10000))
-    t = Thread(target=lambda: app.run(host='0.0.0.0', port=port))
-    t.daemon = True
-    t.start()
-
 if __name__ == "__main__":
-    print("⏳ جاري تهيئة سيرفر الويب الملوكي المستقر...")
-    keep_alive_secure()
-    
-    print("🚀 البوت مستعد تماماً الآن ويعمل بأقل استهلاك ممكن للموارد...")
-    bot.infinity_polling(timeout=30, long_polling_timeout=15)
+    print("⏳ تهيئة النظام ومصفوفة الحماية...")
+    keep_alive()
+    bot.infinity_polling(timeout=40, long_polling_timeout=20)
