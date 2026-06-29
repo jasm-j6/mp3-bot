@@ -23,7 +23,7 @@ def keep_alive():
     t.start()
 
 # 2. الإعدادات الأساسية للبوت
-TOKEN = "8889690063:AAFgia5rX0Ac2wFWRFxFSlITgSUHOaaKU4g"
+TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_USERNAME = "@qafia2"
 DEFAULT_RIGHTS = "تم التعديل بأعلى كفاءة بواسطة  @Mp3_EdBot 🎵"
 
