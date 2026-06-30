@@ -134,7 +134,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري تطبيق الهندسة السحابية لتعديل الحقوق فوراً... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري معالجة وتعديل الحقوق سحابياً... ⏳")
 
     try:
         # جلب البيانات المدخلة أو الحفاظ على الأصول
@@ -147,59 +147,22 @@ def get_photo(message):
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 الخطوة الأولى: إرسال مراجع الملف الصوتي إلى خادم تيليجرام
-        sent_audio = bot.send_audio(
-            chat_id=chat_id,
-            audio=user_data[chat_id]["file_id"],
-            caption=caption_text,
-            timeout=300
-        )
-
-        # 🛠️ الخطوة الثانية الفورية: إجبار تيليجرام على تحرير البيانات الحية للملف المرسل فوراً وتعديل العنوان والبوستر سحابياً
-        bot.edit_message_media(
-            chat_id=chat_id,
-            message_id=sent_audio.message_id,
-            media=types.InputMediaAudio(
-                media=user_data[chat_id]["file_id"],
-                thumb=thumb_file_id,
-                title=final_title,
-                performer=final_artist
-            )
-        )
-        
-        # إعادة إرسال الكابشن للتأكيد بعد التعديل
-        bot.edit_message_caption(
-            chat_id=chat_id,
-            message_id=sent_audio.message_id,
+        # 🚀 إرسال الملف باستخدام ميزة التعديل الفوري المباشر عبر كائن الصوت
+        audio_media = types.InputMediaAudio(
+            media=user_data[chat_id]["file_id"],
+            thumb=thumb_file_id,
+            title=final_title,
+            performer=final_artist,
             caption=caption_text
         )
 
+        # إرسال المجموعة كـ Media Group لكسر الكاش القديم لتليجرام
+        sent_messages = bot.send_media_group(chat_id=chat_id, media=[audio_media], timeout=300)
+
+        # حذف رسالة الانتظار
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة السحابية الفورية: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة السحابية: {str(e)}", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
-    chat_id = call.message.chat.id
-    if call.data == "check_subscription":
-        if check_sub(call.from_user.id):
-            bot.answer_callback_query(call.id, "تم تأكيد الاشتراك! 🎉")
-            bot.delete_message(chat_id, call.message.message_id)
-        else:
-            bot.answer_callback_query(call.id, "❌ لم تشترك بالقناة بعد.", show_alert=True)
-    elif call.data in ["skip_title", "skip_artist", "skip_desc", "skip_photo"]:
-        key = call.data.replace("skip_", "")
-        if key == "photo": user_data.setdefault(chat_id, {})["photo_skipped"] = True
-        else: user_data.setdefault(chat_id, {})[key] = None
-        bot.clear_step_handler_by_chat_id(chat_id)
-        if call.data == "skip_title": get_title(call.message)
-        elif call.data == "skip_artist": get_artist(call.message)
-        elif call.data == "skip_desc": get_description(call.message)
-        elif call.data == "skip_photo": get_photo(call.message)
-
-if __name__ == "__main__":
-    keep_alive()
-    bot.infinity_polling(timeout=50, long_polling_timeout=25)
