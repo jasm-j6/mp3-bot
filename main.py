@@ -1,17 +1,15 @@
 import os
-import re
 from threading import Thread
 from flask import Flask
-import telebot
-from telebot import types
-import requests
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# 1. إعداد خادم الويب الخفيف لمنع نوم السيرفر على Render
+# 1. إعداد خادم الويب الخفيف (Flask) لمنع نوم السيرفر على Render
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "سيرفر البوت مستقر ويعمل بأعلى كفاءة لتعديل الملفات الصوتية الكبيرة! 🛡️🎵"
+    return "سيرفر البوت مستقر ويعمل بأعلى كفاءة لتعديل الملفات الصوتية الكبيرة جداً! 🛡️🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -22,228 +20,176 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 2. جلب التوكن بشكل آمن ومحمي من البيئة المحيطة (Environment Variable)
-TOKEN = os.environ.get("BOT_TOKEN")
+# 2. جلب متغيرات البيئة الحساسة والمحمية من إعدادات Render
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
 CHANNEL_USERNAME = "@qafia2"
 DEFAULT_RIGHTS = "تم التعديل بأعلى كفاءة بواسطة  @Mp3_EdBot 🎵"
 
-bot = telebot.TeleBot(TOKEN)
+# تشغيل البوت بمحرك Pyrogram الخارق للملَّفات الكبيرة
+bot = Client("audio_advanced_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_data = {}
 
-def check_sub(user_id):
+async def check_sub(client, user_id):
     try:
-        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        member = await client.get_chat_member(CHANNEL_USERNAME, user_id)
         return member.status in ["member", "administrator", "creator"]
     except Exception:
         return True
 
-def send_sub_msg(chat_id):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("انضمام للقناة 📢", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"))
-    markup.add(types.InlineKeyboardButton("التحقق من الاشتراك ✅", callback_data="check_subscription"))
-    bot.send_message(
+async def send_sub_msg(client, chat_id):
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("انضمام للقناة 📢", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}")],
+        [InlineKeyboardButton("التحقق من الاشتراك ✅", callback_data="check_subscription")]
+    ])
+    await client.send_message(
         chat_id,
         f"⚠️ عذراً عزيزي، يجب عليك الاشتراك في قناة البوت أولاً لاستخدام الميزات الملوكية:\n\n{CHANNEL_USERNAME}\n\nاشترك ثم اضغط على زر التحقق بالأسفل 👇",
-        reply_markup=markup,
+        reply_markup=markup
     )
 
-@bot.message_handler(commands=["cancel"])
-def cancel_action(message):
-    chat_id = message.chat.id
-    if chat_id in user_data:
-        user_data.pop(chat_id)
-    bot.reply_to(message, "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي جديد في أي وقت.")
-
-@bot.message_handler(commands=["start", "help"])
-def send_welcome(message):
-    chat_id = message.chat.id
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
+@bot.on_message(filters.command("start") & filters.private)
+async def start_cmd(client, message):
+    if not await check_sub(client, message.from_user.id):
+        await send_sub_msg(client, message.chat.id)
         return
-    bot.reply_to(
-        message,
-        "أهلاً بك في النسخة المستقرة والمعتمدة لتعديل الملفات الصوتية الضخمة! 🎵🛡)\n\n"
+    await message.reply_text(
+        "أهلاً بك في النسخة الملوكية الخارقة للملفات الضخمة! 🎵🛡️\n\n"
         "💡 **الميزة الحالية:**\n"
-        "**تعديل الملفات الصوتية:** أرسل ملفك الـ MP3 مباشرة وعدل غلافه، وحقوقه، واسم الفنان، والوصف بسلاسة تامة وبأعلى جودة.\n\n"
-        "أرسل ملفك الصوتي الآن لنبدأ العمل فوراً!",
+        "**تعديل الملفات الصوتية الكبيرة:** أرسل ملفك الـ MP3 مباشرة (حتى لو تجاوز 100 ميجابايت!) وعدل غلافه، وحقوقه بسلاسة تامّة.\n\n"
+        "أرسل ملفك الصوتي الآن لنبدأ العمل فوراً!"
     )
 
-@bot.message_handler(commands=["clean"])
-def clean_unused_files(message):
+@bot.on_message((filters.audio | filters.document) & filters.private)
+async def handle_audio(client, message):
     chat_id = message.chat.id
-    audio_path = f"final_{chat_id}.mp3"
-    photo_path = f"thumb_{chat_id}.jpg"
-    if os.path.exists(audio_path): os.remove(audio_path)
-    if os.path.exists(photo_path): os.remove(photo_path)
-    bot.reply_to(message, "تمت صيانة وتنظيف الملفات المؤقتة بنجاح 🧹")
-
-@bot.message_handler(content_types=["audio", "document"])
-def handle_audio(message):
-    chat_id = message.chat.id
-    if not check_sub(message.from_user.id):
-        send_sub_msg(chat_id)
+    if not await check_sub(client, message.from_user.id):
+        await send_sub_msg(client, chat_id)
         return
 
-    file_info = None
-    if message.content_type == "audio":
-        file_info = message.audio
-    elif message.content_type == "document" and message.document.mime_type.startswith("audio/"):
-        file_info = message.document
-
-    if not file_info:
-        bot.reply_to(message, "الرجاء أرسل ملف صوتي صالح! ❌")
+    # التحقق من نوع الملف والتأكد أنه صوتي
+    file_info = message.audio if message.audio else message.document
+    if message.document and not message.document.mime_type.startswith("audio/"):
+        await message.reply_text("الرجاء أرسل ملف صوتی صالح! ❌")
         return
 
+    # تخزين بيانات المعالجة المؤقتة في الذاكرة
     user_data[chat_id] = {
-        "file_id": file_info.file_id,
+        "message_id": message.id,
         "orig_title": getattr(file_info, "title", "صوت معدل"),
         "orig_artist": getattr(file_info, "performer", "صوتيات فخمة"),
-        "file_size": getattr(file_info, "file_size", 0)
     }
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("تخطي والإبقاء على الأصل ⏭️", callback_data="skip_title"))
-    msg = bot.send_message(chat_id, "وصل الملف بنجاح! ✅\n\nأرسل الآن **العنوان الجديد** للملف، أو اضغط تخطي:", reply_markup=markup)
-    bot.register_next_step_handler(msg, get_title)
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("تخطي والإبقاء على الأصل ⏭️", callback_data="skip_title")]])
+    await message.reply_text("وصل الملف الضخم بنجاح! ✅\n\nأرسل الآن **العنوان الجديد** للملف، أو اضغط تخطي:", reply_markup=markup)
 
-def get_title(message):
+@bot.on_message(filters.text & filters.private)
+async def handle_text_steps(client, message):
     chat_id = message.chat.id
-    if message.text == "/cancel" or not check_sub(message.from_user.id): return
-    if "title" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["title"] = message.text
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("تخطي وإبقاء الأصل ⏭️", callback_data="skip_artist"))
-    msg = bot.send_message(chat_id, "ممتاز! الآن أرسل **اسم الفنان (المطرب)**، أو اضغط تخطي:", reply_markup=markup)
-    bot.register_next_step_handler(msg, get_artist)
-
-def get_artist(message):
-    chat_id = message.chat.id
-    if message.text == "/cancel" or not check_sub(message.from_user.id): return
-    if "artist" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["artist"] = message.text
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("استخدام الحقوق الافتراضية 📝", callback_data="skip_desc"))
-    msg = bot.send_message(chat_id, "رائع! الآن أرسل **الوصف أو الحقوق**، أو اضغط الزر للحقوق الافتراضية:", reply_markup=markup)
-    bot.register_next_step_handler(msg, get_description)
-
-def get_description(message):
-    chat_id = message.chat.id
-    if message.text == "/cancel" or not check_sub(message.from_user.id): return
-    if "desc" not in user_data.get(chat_id, {}): user_data.setdefault(chat_id, {})["desc"] = message.text
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
-    msg = bot.send_message(chat_id, "أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
-    bot.register_next_step_handler(msg, get_photo)
-
-def get_photo(message):
-    chat_id = message.chat.id
-    if message.text == "/cancel" or not check_sub(message.from_user.id): return
-
-    is_skipped = "photo_skipped" in user_data.get(chat_id, {})
-    if message.content_type != "photo" and not is_skipped:
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
-        bot.send_message(chat_id, "الرجاء إرسال صورة صالحة أو الضغط على زر التخطي:", reply_markup=markup)
-        bot.register_next_step_handler(message, get_photo)
+    if chat_id not in user_data:
         return
 
-    status_msg = bot.send_message(chat_id, "جاري معالجة وتجهيز ملفك الصوتي الفخم... انتظر ثوانٍ ⏳")
+    data = user_data[chat_id]
+    
+    # التحقق من الخطوة الحالية وتوجيه النص المدخل بشكل ديناميكي صحيح
+    if "title" not in data:
+        data["title"] = message.text
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("تخطي وإبقاء الأصل ⏭️", callback_data="skip_artist")]])
+        await message.reply_text("ممتاز! الآن أرسل **اسم الفنان (المطرب)**، أو اضغط تخطي:", reply_markup=markup)
+    elif "artist" not in data:
+        data["artist"] = message.text
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("استخدام الحقوق الافتراضية 📝", callback_data="skip_desc")]])
+        await message.reply_text("رائع! الآن أرسل **الوصف أو الحقوق**، أو اضغط الزر للحقوق الافتراضية:", reply_markup=markup)
+    elif "desc" not in data:
+        data["desc"] = message.text
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo")]])
+        await message.reply_text("أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
+
+@bot.on_message(filters.photo & filters.private)
+async def handle_photo(client, message):
+    chat_id = message.chat.id
+    if chat_id not in user_data or "desc" not in user_data[chat_id]:
+        return
+
+    status_msg = await message.reply_text("جاري تحميل ومعالجة الملف الضخم بنظام التدفق السريع... انتظر ثوانٍ ⏳")
+    
+    data = user_data[chat_id]
     audio_path = f"final_{chat_id}.mp3"
     photo_path = f"thumb_{chat_id}.jpg"
 
     try:
-        raw_file_id = user_data[chat_id]["file_id"]
-        file_info = bot.get_file(raw_file_id)
-        file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
-
-        # تحميل الملف الصوتي على شكل أجزاء صغيرة للحفاظ على ذاكرة السيرفر
-        with requests.get(file_url, stream=True, timeout=120) as r:
-            r.raise_for_status()
-            with open(audio_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=65536):
-                    f.write(chunk)
-
+        # جلب الرسالة التي تحتوي على الملف الصوتي الأصلي للتحميل الآمن
+        orig_msg = await client.get_messages(chat_id, data["message_id"])
+        await client.download_media(orig_msg, file_name=audio_path)
+        
         has_photo = False
-        if not is_skipped:
-            photo_id = message.photo[-1].file_id
-            photo_info = bot.get_file(photo_id)
-            downloaded_photo = bot.download_file(photo_info.file_path)
-            with open(photo_path, "wb") as f:
-                f.write(downloaded_photo)
+        if "photo_skipped" not in data:
+            await client.download_media(message.photo, file_name=photo_path)
             has_photo = True
 
-        final_title = user_data[chat_id]["title"] if user_data[chat_id].get("title") else user_data[chat_id]["orig_title"]
-        final_artist = user_data[chat_id]["artist"] if user_data[chat_id].get("artist") else user_data[chat_id]["orig_artist"]
-        caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
+        final_title = data["title"] if data.get("title") else data["orig_title"]
+        final_artist = data["artist"] if data.get("artist") else data["orig_artist"]
+        caption_text = f"🔥 {data['desc']}" if data.get("desc") else f"✅ {DEFAULT_RIGHTS}"
 
-        bot.edit_message_text("جاري رفع الملف الصوتي المعدل إلى تيليجرام بنظام التدفق... 🚀", chat_id, status_msg.message_id)
+        await status_msg.edit_text("جاري إعادة رفع الملف الصوتي المعدل الفخم إلى تيليجرام... 🚀")
 
-        # الخدعة البرمجية: إذا كان الملف كبيراً جداً، نقوم برفعه كـ Document لتفادي قيود الحجم الصارمة للصوتيات
-        with open(audio_path, "rb") as audio_file:
-            if user_data[chat_id]["file_size"] > 45 * 1024 * 1024:
-                # رفع كوثيقة (تتجاوز الحظر التلقائي لحجم الصوتيات)
-                bot.send_document(
-                    chat_id=chat_id,
-                    document=audio_file,
-                    caption=f"🎵 {final_title} - {final_artist}\n\n{caption_text}",
-                    timeout=600
-                )
-            else:
-                # الرفع العادي للصوتيات الصغيرة
-                if has_photo and os.path.exists(photo_path):
-                    with open(photo_path, "rb") as thumb_file:
-                        bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, thumb=thumb_file, caption=caption_text, timeout=300)
-                else:
-                    bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, caption=caption_text, timeout=300)
+        # إرسال الملف الصوتي المعدل والجديد باستخدام تقنية دفق الملفات
+        thumb = photo_path if has_photo else None
+        await client.send_audio(
+            chat_id=chat_id,
+            audio=audio_path,
+            title=final_title,
+            performer=final_artist,
+            thumb=thumb,
+            caption=caption_text
+        )
 
-        bot.delete_message(chat_id, status_msg.message_id)
-
-        # تنظيف فوري ومؤكد للملفات لتوفير مساحة السيرفر
-        if os.path.exists(audio_path): os.remove(audio_path)
-        if os.path.exists(photo_path): os.remove(photo_path)
-        if chat_id in user_data: user_data.pop(chat_id)
+        await status_msg.delete()
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة بملف آخر.", chat_id, status_msg.message_id)
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء المعالجة السحابية المتقدمة: {str(e)}")
+    finally:
+        # تنظيف فوري لملفات الخادم المؤقتة لتوفير المساحة ومقاومة كراش الذاكرة
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
+        user_data.pop(chat_id, None)
 
-@bot.message_handler(content_types=["text"])
-def handle_text(message):
-    if not check_sub(message.from_user.id):
-        send_sub_msg(message.chat.id)
-        return
-    bot.reply_to(message, "🎤 أرسل لي ملفاً صوتياً بصيغة MP3 مباشرة (حتى لو كان كبيراً) لكي نقوم بتعديل حقوقه وغلافه فوراً!")
-
-@bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
+@bot.on_callback_query()
+async def handle_callbacks(client, call):
     chat_id = call.message.chat.id
     if call.data == "check_subscription":
-        if check_sub(call.from_user.id):
-            bot.answer_callback_query(call.id, "تم تأكيد الاشتراك بنجاح! 🎉")
-            bot.delete_message(chat_id, call.message.message_id)
-            bot.send_message(chat_id, "أرسل الآن الملف الصوتي لبدء العمل الفوري 🎵")
+        if await check_sub(client, call.from_user.id):
+            await call.answer("تم تأكيد الاشتراك بنجاح! 🎉")
+            await call.message.delete()
         else:
-            bot.answer_callback_query(call.id, "❌ لم تشترك في القناة بعد.", show_alert=True)
+            await call.answer("❌ لم تشترك في القناة بعد.", show_alert=True)
+            
     elif call.data == "skip_title":
         user_data.setdefault(chat_id, {})["title"] = None
-        bot.clear_step_handler_by_chat_id(chat_id)
-        get_title(call.message)
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("تخطي وإبقاء الأصل ⏭️", callback_data="skip_artist")]])
+        await call.message.edit_text("ممتاز! الآن أرسل **اسم الفنان (المطرب)**، أو اضغط تخطي:", reply_markup=markup)
+        
     elif call.data == "skip_artist":
         user_data.setdefault(chat_id, {})["artist"] = None
-        bot.clear_step_handler_by_chat_id(chat_id)
-        get_artist(call.message)
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("استخدام الحقوق الافتراضية 📝", callback_data="skip_desc")]])
+        await call.message.edit_text("رائع! الآن أرسل **الوصف أو الحقوق**، أو اضغط الزر للحقوق الافتراضية:", reply_markup=markup)
+        
     elif call.data == "skip_desc":
         user_data.setdefault(chat_id, {})["desc"] = None
-        bot.clear_step_handler_by_chat_id(chat_id)
-        get_description(call.message)
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo")]])
+        await call.message.edit_text("أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
+        
     elif call.data == "skip_photo":
         user_data.setdefault(chat_id, {})["photo_skipped"] = True
-        bot.clear_step_handler_by_chat_id(chat_id)
-        get_photo(call.message)
+        await call.message.edit_text("جاري المعالجة الفورية للملف الصوتي بدون بوستر... ⏳")
+        # اصطناع كائن رسالة فارغ لمحاكاة الرفع المباشر دون توقف الكود
+        class FakeMessage:
+            photo = None
+        await handle_photo(client, FakeMessage())
 
 if __name__ == "__main__":
-    print("🚀 تشغيل السيرفر بالنسخة المستقرة المخصصة للملفات الكبيرة...")
+    print("🚀 المحرك السحابي الخارق قيد التشغيل للملفات الضخمة...")
     keep_alive()
-    bot.infinity_polling(timeout=50, long_polling_timeout=25)
+    bot.run()
