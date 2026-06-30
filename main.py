@@ -1,5 +1,6 @@
 import os
 import re
+import random
 from threading import Thread
 from flask import Flask
 import telebot
@@ -11,7 +12,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "سيرفر البوت يعمل بأعلى معايير الأمان والاستقرار البرمجي! 🛡️🚀"
+    return "سيرفر البوت يعمل بأعلى معايير الأمان والاستقرار البرمجي مع دعم البروكسي الذكي! 🛡️🌐"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -56,7 +57,7 @@ def cancel_action(message):
     chat_id = message.chat.id
     if chat_id in user_data:
         user_data.pop(chat_id)
-    bot.reply_to(message, "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتی أو رابط جديد في أي وقت.")
+    bot.reply_to(message, "تم إلغاء العملية الحالية بنجاح 🛑\nيمكنك إرسال ملف صوتي أو رابط جديد في أي وقت.")
 
 @bot.message_handler(commands=["start", "help"])
 def send_welcome(message):
@@ -66,59 +67,88 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "أهلاً بك في النسخة المستقرة والمؤمنة بالكامل! 🎵🛡️\n\n"
+        "أهلاً بك في النسخة المستقرة والمحمية بالكامل بنظام البروكسي المطور! 🎵🛡️\n\n"
         "💡 **الميزات الحالية:**\n"
         "1- **تعديل الملفات:** أرسل ملفك الـ MP3 مباشرة وعدل بوستره وحقوقه بسلاسة تامة.\n"
-        "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، تيك توك، وسيتم استخراج الصوت فوراً لتجنب الحظر.\n\n"
+        "2- **تحميل الروابط:** أرسل روابط يوتيوب، شورتس، تيك توك، وسيتم الاستخراج فوراً بتخطي جدران الحماية.\n\n"
         "أرسل ما لديك الآن لنبدأ فوراً!",
     )
 
-# دالة الاستخراج الهجينة (تدمج بين محرك بحث ومصفوفات بديلة متقدمة جداً لتجاوز أي حظر)
-def fetch_audio_from_matrix(url):
-    # مصفوفات حديثة جداً تستخدم بروتوكولات v2 لتخطي حظر عام 2026
+# دالة ذكية لجلب بروكسيات مجانية سريعة ومحدثة لحظياً لتخطي حظر IP السيرفر
+def get_free_proxies():
+    try:
+        # جلب قائمة بروكسيات ممتازة ونظيفة من مصدر موثوق ومفتوح
+        response = requests.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=5)
+        if response.status_code == 200:
+            proxies_list = response.text.strip().split("\r\n")
+            if len(proxies_list) > 1:
+                return proxies_list
+    except Exception:
+        pass
+    # بروكسيات احتياطية عامة في حال فشل جلب القائمة الديناميكية
+    return ["185.199.229.156:7492", "45.77.56.114:8080", "198.211.121.52:80"]
+
+# دالة الاستخراج الملوكية المدعومة بنفق البروكسي التناوبي (Proxy Rotation)
+def fetch_audio_with_proxy(url):
+    proxies_pool = get_free_proxies()
+    # اختيار 5 بروكسيات عشوائياً لتجربتها بالتناوب من أجل السرعة
+    selected_proxies = random.sample(proxies_pool, min(len(proxies_pool), 5))
+    
     apis = [
-        {"url": "https://api.tikwy.com/api/v1/download", "method": "POST", "payload": {"url": url, "audio": True}},
-        {"url": "https://savetube.me/api/v1/single/video", "method": "POST", "payload": {"url": url}},
         {"url": "https://api.download.is/api/json", "method": "POST", "payload": {"url": url, "service": "youtube", "format": "mp3"}},
-        {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3"}}
+        {"url": "https://api.cobalt.tools/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio", "audioFormat": "mp3"}},
+        {"url": "https://co.wuk.sh/api/json", "method": "POST", "payload": {"url": url, "downloadMode": "audio"}}
     ]
     
     headers = {
         "Accept": "application/json", 
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
-    
+
+    # المحاولة بدون بروكسي أولاً كخيار افتراضي سريع
     for api in apis:
         try:
             if "tiktok.com" in url and "download.is" in api["url"]:
                 api["payload"]["service"] = "tiktok"
-                
-            res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=12)
-            if res.status_code == 200:
+            res = requests.post(api["url"], json=api["payload"], headers=headers, timeout=5)
+            if res.status_code == 200 and ("url" in res.json() or "link" in res.json()):
                 data = res.json()
-                # فحص مفاتيح الاستجابة المختلفة حسب كل مصفوفة
-                if "url" in data and data["url"]:
-                    return data["url"], data.get("filename", "audio.mp3")
-                elif "link" in data and data["link"]:
-                    return data["link"], data.get("title", "audio") + ".mp3"
-                elif "result" in data and "url" in data["result"]:
-                    return data["result"]["url"], "audio.mp3"
+                return data.get("url") or data.get("link"), data.get("filename") or "audio.mp3"
         except Exception:
             continue
-            
+
+    # الخطة الهندسية الحاسمة: تجربة الطلب عبر نفق البروكسي لكسر جدار الحماية
+    print("⚠️ تم رصد حظر IP من المنصة.. تفعيل نفق البروكسي التناوبي الآن...")
+    for proxy_addr in selected_proxies:
+        proxy_dict = {
+            "http": f"http://{proxy_addr}",
+            "https": f"http://{proxy_addr}"
+        }
+        for api in apis:
+            try:
+                res = requests.post(api["url"], json=api["payload"], headers=headers, proxies=proxy_dict, timeout=6)
+                if res.status_code == 200:
+                    data = res.json()
+                    if "url" in data and data["url"]:
+                        return data["url"], data.get("filename", "audio.mp3")
+                    elif "link" in data and data["link"]:
+                        return data["link"], data.get("title", "audio") + ".mp3"
+            except Exception:
+                continue # إذا فشل هذا البروكسي أو حُظر، ننتقل فوراً للبروكسي التالي
+                
     return None, None
 
 def handle_url_download(message):
     chat_id = message.chat.id
     url = message.text.strip()
-    status_msg = bot.reply_to(message, "جاري معالجة الرابط عبر مصفوفة العبور الآمن الفائقة... ⏳")
+    status_msg = bot.reply_to(message, "جاري اختراق جدران الحماية عبر نفق البروكسي التناوبي الذكي... ⏳")
     
-    direct_link, filename = fetch_audio_from_matrix(url)
+    direct_link, filename = fetch_audio_with_proxy(url)
     
     if direct_link:
         try:
-            bot.edit_message_text("تم فك التشفير بنجاح! جاري إرسال الملف الصوتي... 🚀", chat_id, status_msg.message_id)
+            bot.edit_message_text("تم كسر التشفير وتجاوز الحماية بنجاح! جاري رفع الصوت... 🚀", chat_id, status_msg.message_id)
             title = os.path.splitext(filename)[0] if filename else "صوت مستخرج فخم"
             
             bot.send_audio(
@@ -126,23 +156,14 @@ def handle_url_download(message):
                 audio=direct_link,
                 title=title,
                 performer=DEFAULT_RIGHTS,
-                caption=f"✅ تم استخراج الصوت بنجاح\n👉 {DEFAULT_RIGHTS}",
+                caption=f"✅ تم استخراج الصوت بنجاح عبر نفق البروكسي الآمن\n👉 {DEFAULT_RIGHTS}",
                 timeout=300
             )
             bot.delete_message(chat_id, status_msg.message_id)
         except Exception as e:
             bot.edit_message_text(f"❌ نجح الاستخراج ولكن تيليجرام واجه قيداً في الرفع: {str(e)}", chat_id, status_msg.message_id)
     else:
-        bot.edit_message_text("❌ واجهت جدران الحماية قيوداً صارمة من المنصة المصدر، يرجى تجربة رابط آخر لاحقاً.", chat_id, status_msg.message_id)
-
-@bot.message_handler(commands=["clean"])
-def clean_unused_files(message):
-    chat_id = message.chat.id
-    audio_path = f"final_{chat_id}.mp3"
-    photo_path = f"thumb_{chat_id}.jpg"
-    if os.path.exists(audio_path): os.remove(audio_path)
-    if os.path.exists(photo_path): os.remove(photo_path)
-    bot.reply_to(message, "تمت صيانة وتنظيف الملفات المؤقتة بنجاح 🧹")
+        bot.edit_message_text("❌ جدران الحماية صلبة جداً حالياً وتغلبت على البروكسيات المتاحة، يرجى المحاولة لاحقاً أو رفع الملف مباشرة.", chat_id, status_msg.message_id)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -299,6 +320,6 @@ def callback_inline(call):
         get_photo(call.message)
 
 if __name__ == "__main__":
-    print("⏳ تهيئة النظام ومصفوفة الحماية الآمنة...")
+    print("⏳ تهيئة نظام الحماية المطور ونفق البروكسي التناوبي...")
     keep_alive()
     bot.infinity_polling(timeout=40, long_polling_timeout=20)
