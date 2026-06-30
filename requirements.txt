@@ -1,4 +1,3 @@
 pyTelegramBotAPI
-mutagen
 requests
 flask
