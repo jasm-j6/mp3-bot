@@ -9,7 +9,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "السيرفر الذكي السحابي يعمل بأعلى كفاءة وبدون حدود للأحجام! 🚀🎵"
+    return "السيرفر الذكي يعمل بأعلى كفاءة وبدون حدود للأحجام! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -81,7 +81,6 @@ def handle_audio(message):
         bot.reply_to(message, "الرجاء أرسل ملف صوتي صالح! ❌")
         return
 
-    # حفظ مراجع الملف دون تحميله للحفاظ على موارد السيرفر
     user_data[chat_id] = {
         "file_id": file_info.file_id,
         "orig_title": getattr(file_info, "title", "صوت معدل"),
@@ -96,7 +95,7 @@ def handle_audio(message):
 def get_title(message):
     chat_id = message.chat.id
     if chat_id not in user_data: return
-    if "title" not in user_data[chat_id]: user_data[chat_id]["title"] = message.text
+    if message.text: user_data[chat_id]["title"] = message.text
     
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("تخطي وإبقاء الأصل ⏭️", callback_data="skip_artist"))
@@ -106,7 +105,7 @@ def get_title(message):
 def get_artist(message):
     chat_id = message.chat.id
     if chat_id not in user_data: return
-    if "artist" not in user_data[chat_id]: user_data[chat_id]["artist"] = message.text
+    if message.text: user_data[chat_id]["artist"] = message.text
     
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("استخدام الحقوق الافتراضية 📝", callback_data="skip_desc"))
@@ -116,12 +115,13 @@ def get_artist(message):
 def get_description(message):
     chat_id = message.chat.id
     if chat_id not in user_data: return
-    if "desc" not in user_data[chat_id]: user_data[chat_id]["desc"] = message.text
+    if message.text: user_data[chat_id]["desc"] = message.text
     
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
     msg = bot.send_message(chat_id, "أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_photo)
+
 def get_photo(message):
     chat_id = message.chat.id
     if chat_id not in user_data: return
@@ -137,32 +137,61 @@ def get_photo(message):
     status_msg = bot.send_message(chat_id, "جاري معالجة وتعديل الحقوق سحابياً... ⏳")
 
     try:
-        # جلب البيانات المدخلة أو الحفاظ على الأصول
-        final_title = user_data[chat_id]["title"] if user_data[chat_id].get("title") else user_data[chat_id]["orig_title"]
-        final_artist = user_data[chat_id]["artist"] if user_data[chat_id].get("artist") else user_data[chat_id]["orig_artist"]
+        final_title = user_data[chat_id].get("title") or user_data[chat_id]["orig_title"]
+        final_artist = user_data[chat_id].get("artist") or user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
         
-        # تجهيز الغلاف إذا أُرسل
         thumb_file_id = None
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 إرسال الملف باستخدام ميزة التعديل الفوري المباشر عبر كائن الصوت
-        audio_media = types.InputMediaAudio(
-            media=user_data[chat_id]["file_id"],
-            thumb=thumb_file_id,
-            title=final_title,
-            performer=final_artist,
-            caption=caption_text
+        # 🚀 الإرسال الأول لتوليد الرسالة الأساسية
+        sent_audio = bot.send_audio(
+            chat_id=chat_id,
+            audio=user_data[chat_id]["file_id"],
+            caption=caption_text,
+            timeout=300
         )
 
-        # إرسال المجموعة كـ Media Group لكسر الكاش القديم لتليجرام
-        sent_messages = bot.send_media_group(chat_id=chat_id, media=[audio_media], timeout=300)
+        # 🛠️ الهندسة الفردية الحقيقية: تعديل بيانات الوسائط بشكل منفصل لإجبار خوادم تليجرام على تحديث الكاش
+        bot.edit_message_media(
+            chat_id=chat_id,
+            message_id=sent_audio.message_id,
+            media=types.InputMediaAudio(
+                media=user_data[chat_id]["file_id"],
+                thumbnail=thumb_file_id,
+                title=final_title,
+                performer=final_artist,
+                caption=caption_text
+            )
+        )
 
-        # حذف رسالة الانتظار
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة السحابية: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_inline(call):
+    chat_id = call.message.chat.id
+    if call.data == "check_subscription":
+        if check_sub(call.from_user.id):
+            bot.answer_callback_query(call.id, "تم تأكيد الاشتراك! 🎉")
+            bot.delete_message(chat_id, call.message.message_id)
+        else:
+            bot.answer_callback_query(call.id, "❌ لم تشترك بالقناة بعد.", show_alert=True)
+    elif call.data in ["skip_title", "skip_artist", "skip_desc", "skip_photo"]:
+        key = call.data.replace("skip_", "")
+        if key == "photo": user_data.setdefault(chat_id, {})["photo_skipped"] = True
+        else: user_data.setdefault(chat_id, {})[key] = None
+        bot.clear_step_handler_by_chat_id(chat_id)
+        if call.data == "skip_title": get_title(call.message)
+        elif call.data == "skip_artist": get_artist(call.message)
+        elif call.data == "skip_desc": get_description(call.message)
+        elif call.data == "skip_photo": get_photo(call.message)
+
+if __name__ == "__main__":
+    keep_alive()
+    bot.infinity_polling(timeout=50, long_polling_timeout=25)
