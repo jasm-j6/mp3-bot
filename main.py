@@ -11,7 +11,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "سيرفر البوت مستقر ويعمل بأعلى كفاءة لتعديل الملفات الصوتية! 🛡️🎵"
+    return "سيرفر البوت مستقر ويعمل بأعلى كفاءة لتعديل الملفات الصوتية الكبيرة! 🛡️🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -62,7 +62,7 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "أهلاً بك في النسخة المستقرة والمعتمدة بالكامل! 🎵🛡️\n\n"
+        "أهلاً بك في النسخة المستقرة والمعتمدة لتعديل الملفات الصوتية الضخمة! 🎵🛡)\n\n"
         "💡 **الميزة الحالية:**\n"
         "**تعديل الملفات الصوتية:** أرسل ملفك الـ MP3 مباشرة وعدل غلافه، وحقوقه، واسم الفنان، والوصف بسلاسة تامة وبأعلى جودة.\n\n"
         "أرسل ملفك الصوتي الآن لنبدأ العمل فوراً!",
@@ -91,23 +91,14 @@ def handle_audio(message):
         file_info = message.document
 
     if not file_info:
-        bot.reply_to(message, "الرجاء أرسل ملف صوتی صالح! ❌")
-        return
-
-    # فحص حجم الملف فوراً قبل البدء بالمعالجة لحماية السيرفر وتنبيه المستخدم
-    if getattr(file_info, "file_size", 0) > 49 * 1024 * 1024:
-        bot.reply_to(
-            message, 
-            "⚠️ **تنبيه بخصوص الملفات الكبيرة:**\n"
-            "الملف الذي أرسلته يتجاوز حد الـ 50 ميجابايت المسموح به من نظام تيليجرام للبوتات العادية.\n"
-            "الرجاء إرسال ملف أصغر حجماً ليتمكن البوت من معالجته بنجاح! ❌"
-        )
+        bot.reply_to(message, "الرجاء أرسل ملف صوتي صالح! ❌")
         return
 
     user_data[chat_id] = {
         "file_id": file_info.file_id,
         "orig_title": getattr(file_info, "title", "صوت معدل"),
         "orig_artist": getattr(file_info, "performer", "صوتيات فخمة"),
+        "file_size": getattr(file_info, "file_size", 0)
     }
 
     markup = types.InlineKeyboardMarkup()
@@ -157,7 +148,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    bot.send_message(chat_id, "جاري معالجة وتجهيز ملفك الصوتي الفخم... انتظر ثوانٍ ⏳")
+    status_msg = bot.send_message(chat_id, "جاري معالجة وتجهيز ملفك الصوتي الفخم... انتظر ثوانٍ ⏳")
     audio_path = f"final_{chat_id}.mp3"
     photo_path = f"thumb_{chat_id}.jpg"
 
@@ -166,10 +157,11 @@ def get_photo(message):
         file_info = bot.get_file(raw_file_id)
         file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
-        with requests.get(file_url, stream=True, timeout=60) as r:
+        # تحميل الملف الصوتي على شكل أجزاء صغيرة للحفاظ على ذاكرة السيرفر
+        with requests.get(file_url, stream=True, timeout=120) as r:
             r.raise_for_status()
             with open(audio_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=16384):
+                for chunk in r.iter_content(chunk_size=65536):
                     f.write(chunk)
 
         has_photo = False
@@ -185,12 +177,27 @@ def get_photo(message):
         final_artist = user_data[chat_id]["artist"] if user_data[chat_id].get("artist") else user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
 
+        bot.edit_message_text("جاري رفع الملف الصوتي المعدل إلى تيليجرام بنظام التدفق... 🚀", chat_id, status_msg.message_id)
+
+        # الخدعة البرمجية: إذا كان الملف كبيراً جداً، نقوم برفعه كـ Document لتفادي قيود الحجم الصارمة للصوتيات
         with open(audio_path, "rb") as audio_file:
-            if has_photo and os.path.exists(photo_path):
-                with open(photo_path, "rb") as thumb_file:
-                    bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, thumb=thumb_file, caption=caption_text, timeout=300)
+            if user_data[chat_id]["file_size"] > 45 * 1024 * 1024:
+                # رفع كوثيقة (تتجاوز الحظر التلقائي لحجم الصوتيات)
+                bot.send_document(
+                    chat_id=chat_id,
+                    document=audio_file,
+                    caption=f"🎵 {final_title} - {final_artist}\n\n{caption_text}",
+                    timeout=600
+                )
             else:
-                bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, caption=caption_text, timeout=300)
+                # الرفع العادي للصوتيات الصغيرة
+                if has_photo and os.path.exists(photo_path):
+                    with open(photo_path, "rb") as thumb_file:
+                        bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, thumb=thumb_file, caption=caption_text, timeout=300)
+                else:
+                    bot.send_audio(chat_id=chat_id, audio=audio_file, title=final_title, performer=final_artist, caption=caption_text, timeout=300)
+
+        bot.delete_message(chat_id, status_msg.message_id)
 
         # تنظيف فوري ومؤكد للملفات لتوفير مساحة السيرفر
         if os.path.exists(audio_path): os.remove(audio_path)
@@ -198,7 +205,7 @@ def get_photo(message):
         if chat_id in user_data: user_data.pop(chat_id)
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة.")
+        bot.edit_message_text(f"❌ حدث خطأ أثناء المعالجة السحابية: {str(e)}\nيرجى إعادة المحاولة بملف آخر.", chat_id, status_msg.message_id)
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
 
@@ -207,7 +214,7 @@ def handle_text(message):
     if not check_sub(message.from_user.id):
         send_sub_msg(message.chat.id)
         return
-    bot.reply_to(message, "🎤 أرسل لي ملفاً صوتياً بصيغة MP3 مباشرة لكي نقوم بتعديل حقوقه وغلافه فوراً!")
+    bot.reply_to(message, "🎤 أرسل لي ملفاً صوتياً بصيغة MP3 مباشرة (حتى لو كان كبيراً) لكي نقوم بتعديل حقوقه وغلافه فوراً!")
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
@@ -237,6 +244,6 @@ def callback_inline(call):
         get_photo(call.message)
 
 if __name__ == "__main__":
-    print("🚀 تشغيل السيرفر بالنسخة المستقرة المخصصة للملفات...")
+    print("🚀 تشغيل السيرفر بالنسخة المستقرة المخصصة للملفات الكبيرة...")
     keep_alive()
-    bot.infinity_polling(timeout=40, long_polling_timeout=20)
+    bot.infinity_polling(timeout=50, long_polling_timeout=25)
