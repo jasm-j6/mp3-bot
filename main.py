@@ -122,7 +122,6 @@ def get_description(message):
     markup.add(types.InlineKeyboardButton("تخطي بدون بوستر ⏭️", callback_data="skip_photo"))
     msg = bot.send_message(chat_id, "أخيراً، أرسل **الصورة المصغرة (الغلاف)**، أو اضغط زر التخطي:", reply_markup=markup)
     bot.register_next_step_handler(msg, get_photo)
-
 def get_photo(message):
     chat_id = message.chat.id
     if chat_id not in user_data: return
@@ -135,7 +134,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري معالجة وتعديل الحقوق سحابياً عبر خوادم تيليجرام الفورية... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري تطبيق الهندسة السحابية لتعديل الحقوق فوراً... ⏳")
 
     try:
         # جلب البيانات المدخلة أو الحفاظ على الأصول
@@ -148,21 +147,37 @@ def get_photo(message):
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 الهندسة السحابية الحقيقية: إعادة إرسال الملف مباشرة بالصلاحيات والعناوين الجديدة بدون تحميله للسيرفر
-        bot.send_audio(
+        # 🚀 الخطوة الأولى: إرسال مراجع الملف الصوتي إلى خادم تيليجرام
+        sent_audio = bot.send_audio(
             chat_id=chat_id,
             audio=user_data[chat_id]["file_id"],
-            title=final_title,
-            performer=final_artist,
-            thumb=thumb_file_id,
             caption=caption_text,
             timeout=300
+        )
+
+        # 🛠️ الخطوة الثانية الفورية: إجبار تيليجرام على تحرير البيانات الحية للملف المرسل فوراً وتعديل العنوان والبوستر سحابياً
+        bot.edit_message_media(
+            chat_id=chat_id,
+            message_id=sent_audio.message_id,
+            media=types.InputMediaAudio(
+                media=user_data[chat_id]["file_id"],
+                thumb=thumb_file_id,
+                title=final_title,
+                performer=final_artist
+            )
+        )
+        
+        # إعادة إرسال الكابشن للتأكيد بعد التعديل
+        bot.edit_message_caption(
+            chat_id=chat_id,
+            message_id=sent_audio.message_id,
+            caption=caption_text
         )
 
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة السحابية المباشرة: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة السحابية الفورية: {str(e)}", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
 
