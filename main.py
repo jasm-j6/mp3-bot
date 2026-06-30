@@ -4,12 +4,11 @@ from flask import Flask
 import telebot
 from telebot import types
 
-# 1. خادم ويب خفيف للحفاظ على استقرار Render لمنع الكراش
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "السيرفر الذكي يعمل بأعلى كفاءة وبدون حدود للأحجام! 🚀🎵"
+    return "السيرفر الملوكي المستقر يعمل بأعلى كفاءة! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -20,7 +19,6 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 2. إعدادات التوكن والقنوات
 TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_USERNAME = "@qafia2"
 DEFAULT_RIGHTS = "تم التعديل بنجاح وبأعلى كفاءة سحابية بواسطة @Mp3_EdBot 🎵"
@@ -134,7 +132,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري معالجة وتعديل الحقوق سحابياً... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري تطبيق الهندسة السحابية الحرة... ⏳")
 
     try:
         final_title = user_data[chat_id].get("title") or user_data[chat_id]["orig_title"]
@@ -145,31 +143,23 @@ def get_photo(message):
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 الإرسال الأول لتوليد الرسالة الأساسية
-        sent_audio = bot.send_audio(
-            chat_id=chat_id,
+        # 🚀 الحل النهائي: الإرسال المباشر للقناة مع كافة البيانات والبوستر لتوليد كاش جديد حتماً
+        chan_msg = bot.send_audio(
+            chat_id=CHANNEL_USERNAME,
             audio=user_data[chat_id]["file_id"],
+            thumb=thumb_file_id,
+            title=final_title,
+            performer=final_artist,
             caption=caption_text,
             timeout=300
         )
 
-        # 🛠️ الهندسة الفردية الحقيقية: تعديل بيانات الوسائط بشكل منفصل لإجبار خوادم تليجرام على تحديث الكاش
-        bot.edit_message_media(
-            chat_id=chat_id,
-            message_id=sent_audio.message_id,
-            media=types.InputMediaAudio(
-                media=user_data[chat_id]["file_id"],
-                thumbnail=thumb_file_id,
-                title=final_title,
-                performer=final_artist,
-                caption=caption_text
-            )
-        )
-
+        # تحويل الملف الفريش والمعدل فوراً إلى محادثة المستخدم وحذف رسالة الانتظار
+        bot.copy_message(chat_id=chat_id, from_chat_id=CHANNEL_USERNAME, message_id=chan_msg.message_id)
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}\n\nتأكد أن البوت مرفوع 'مشرف' داخل القناة ليعمل التعديل السحابي الفوري!", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
 
