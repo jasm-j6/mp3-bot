@@ -3,14 +3,14 @@ from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
-import eyed3
-from eyed3.id3.frames import ImageFrame
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, TIT2, TPE1, APIC
 
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "المحرك السحابي الحقيقي لمعالجة الملفات الصغيرة يعمل بنجاح! 🚀🎵"
+    return "المحرك السحابي الفولاذي يعمل بنجاح! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -28,7 +28,6 @@ DEFAULT_RIGHTS = "تم التعديل بنجاح وبأعلى كفاءة سحا�
 bot = telebot.TeleBot(TOKEN)
 user_data = {}
 
-# تحديد الحد الأقصى للحجم (20 ميجابايت) لسلامة السيرفر
 MAX_FILE_SIZE = 20 * 1024 * 1024 
 
 def check_sub(user_id):
@@ -56,8 +55,8 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "مرحباً بك في النسخة السحابية المستقرة! 🎧\n\n"
-        "ℹ️ **ملاحظة هامة:** هذا البوت مخصص لمعالجة وتعديل الملفات الصوتية التي يقل حجمها عن **20 ميجابايت** لضمان جودة وسرعة الخدمة السحابية.\n\n"
+        "مرحباً بك في النسخة السحابية المستقرة والمطورة! 🎧\n\n"
+        "ℹ️ **ملاحظة هامة:** البوت يعالج الآن الملفات حتى **20 ميجابايت** بأعلى كفاءة برمجية.\n\n"
         "🛠️ طـريـقـة الـعـمـل:\n"
         "1️⃣ أرسل الملف الصوتي (MP3) المراد تعديله هنا.\n"
         "2️⃣ أرسل العنوان الجديد، أو اضغط (تخطي).\n"
@@ -85,7 +84,7 @@ def handle_audio(message):
         return
 
     if file_info.file_size > MAX_FILE_SIZE:
-        bot.reply_to(message, "⚠️ عذراً يا غالي، حجم الملف أكبر من 20 ميجابايت. الرجاء إرسال ملفات أصغر لتجنب توقف السيرفر كلياً.")
+        bot.reply_to(message, "⚠️ عذراً يا غالي، حجم الملف أكبر من 20 ميجابايت.")
         return
 
     user_data[chat_id] = {
@@ -141,7 +140,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري تحميل الملف وتعديل الهوية الصوتية داخلياً... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري المعالجة السحابية المتقدمة وحقن البيانات... ⏳")
 
     audio_path = f"audio_{chat_id}.mp3"
     photo_path = f"thumb_{chat_id}.jpg"
@@ -151,13 +150,13 @@ def get_photo(message):
         final_artist = user_data[chat_id].get("artist") or user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
         
-        # تحميل الملف الصوتي إلى السيرفر
+        # تحميل الملف الصوتي
         file_info = bot.get_file(user_data[chat_id]["file_id"])
         downloaded_file = bot.download_file(file_info.file_path)
         with open(audio_path, 'wb') as new_file:
             new_file.write(downloaded_file)
 
-        # تحميل الصورة إذا وُجدت
+        # تحميل الصورة
         has_photo = False
         if not is_skipped and message.photo:
             photo_info = bot.get_file(message.photo[-1].file_id)
@@ -166,21 +165,31 @@ def get_photo(message):
                 p_file.write(downloaded_photo)
             has_photo = True
 
-        # المعالجة وحقن البيانات داخل ملف الـ MP3 قسرياً كملف جديد
-        audiofile = eyed3.load(audio_path)
-        if audiofile.tag is None:
-            audiofile.initTag()
+        # 🦾 المعالجة القوية باستخدام Mutagen والتأكد من وجود الـ ID3 Tags
+        try:
+            audio = MP3(audio_path, ID3=ID3)
+        except Exception:
+            audio = MP3(audio_path)
+            audio.add_tags()
+
+        # إدراج النصوص بترمييز UTF-8 المتوافق مع كل الأجهزة
+        audio.tags.add(TIT2(encoding=3, text=final_title))
+        audio.tags.add(TPE1(encoding=3, text=final_artist))
         
-        audiofile.tag.title = final_title
-        audiofile.tag.artist = final_artist
-        
+        # حقن البوستر داخل الملف
         if has_photo:
             with open(photo_path, "rb") as img_file:
-                audiofile.tag.images.set(ImageFrame.FRONT_COVER, img_file.read(), "image/jpeg")
+                audio.tags.add(APIC(
+                    encoding=3,
+                    mime='image/jpeg',
+                    type=3, # غلاف أمامي
+                    desc=u'Cover',
+                    data=img_file.read()
+                ))
         
-        audiofile.tag.save()
+        audio.save()
 
-        # إرسال الملف الجديد المعدل بالكامل للمستخدم مباشرة
+        # إرسال الملف المعدل والنهائي للمستخدم
         with open(audio_path, 'rb') as audio_to_send:
             bot.send_audio(
                 chat_id=chat_id,
@@ -194,9 +203,8 @@ def get_photo(message):
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة الداخلية: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
     finally:
-        # تنظيف السيرفر وحذف الملفات المؤقتة فوراً لحفظ المساحة
         if os.path.exists(audio_path): os.remove(audio_path)
         if os.path.exists(photo_path): os.remove(photo_path)
         user_data.pop(chat_id, None)
