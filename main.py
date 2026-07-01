@@ -3,12 +3,14 @@ from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
+import eyed3
+from eyed3.id3.frames import ImageFrame
 
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "المحرك الملوكي السحابي يعمل بأعلى كفاءة وسرية تامة! 🚀🎵"
+    return "المحرك السحابي الحقيقي لمعالجة الملفات الصغيرة يعمل بنجاح! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -25,6 +27,9 @@ DEFAULT_RIGHTS = "تم التعديل بنجاح وبأعلى كفاءة سحا�
 
 bot = telebot.TeleBot(TOKEN)
 user_data = {}
+
+# تحديد الحد الأقصى للحجم (20 ميجابايت) لسلامة السيرفر
+MAX_FILE_SIZE = 20 * 1024 * 1024 
 
 def check_sub(user_id):
     try:
@@ -51,14 +56,15 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "مرحباً بك مجدداً! 🎧 البوت جاهز تماماً للعمل السرّي والمعدل.\n\n"
+        "مرحباً بك في النسخة السحابية المستقرة! 🎧\n\n"
+        "ℹ️ **ملاحظة هامة:** هذا البوت مخصص لمعالجة وتعديل الملفات الصوتية التي يقل حجمها عن **20 ميجابايت** لضمان جودة وسرعة الخدمة السحابية.\n\n"
         "🛠️ طـريـقـة الـعـمـل:\n"
         "1️⃣ أرسل الملف الصوتي (MP3) المراد تعديله هنا.\n"
-        "2️⃣ أرسل العنوان الجديد، أو اضغط (تخطي) للإبقاء على الأصل.\n"
+        "2️⃣ أرسل العنوان الجديد، أو اضغط (تخطي).\n"
         "3️⃣ أرسل اسم الفنان (المطرب)، أو اضغط (تخطي).\n"
-        "4️⃣ اكتب الحقوق أو الوصف النصي الذي تريده تحت الملف.\n"
+        "4️⃣ اكتب الحقوق أو الوصف النصي الذي تريده.\n"
         "5️⃣ أرسل غلاف الملف (الصورة المصغرة)، أو اضغط (تخطي).\n\n"
-        "🚀 سيتولى البوت المعالجة السحابية الفورية ويعيد إليك ملفك معدلاً في ثوانٍ!"
+        "بانتظار ملفك الصوتي الآن... 📥"
     )
 
 @bot.message_handler(content_types=["audio", "document"])
@@ -76,6 +82,10 @@ def handle_audio(message):
 
     if not file_info:
         bot.reply_to(message, "الرجاء أرسل ملف صوتي صالح! ❌")
+        return
+
+    if file_info.file_size > MAX_FILE_SIZE:
+        bot.reply_to(message, "⚠️ عذراً يا غالي، حجم الملف أكبر من 20 ميجابايت. الرجاء إرسال ملفات أصغر لتجنب توقف السيرفر كلياً.")
         return
 
     user_data[chat_id] = {
@@ -131,47 +141,64 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري معالجة وتحديث الحقوق سحابياً وبشكل سري تماماً... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري تحميل الملف وتعديل الهوية الصوتية داخلياً... ⏳")
+
+    audio_path = f"audio_{chat_id}.mp3"
+    photo_path = f"thumb_{chat_id}.jpg"
 
     try:
         final_title = user_data[chat_id].get("title") or user_data[chat_id]["orig_title"]
         final_artist = user_data[chat_id].get("artist") or user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
         
-        thumb_file_id = None
-        if not is_skipped and message.photo:
-            thumb_file_id = message.photo[-1].file_id
+        # تحميل الملف الصوتي إلى السيرفر
+        file_info = bot.get_file(user_data[chat_id]["file_id"])
+        downloaded_file = bot.download_file(file_info.file_path)
+        with open(audio_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
 
-        # 🚀 الاستراتيجية الحاسمة لكسر الكاش قسرياً وبأمان كامل:
-        # إذا وجد بوستر، نرسل الملف كـ Media Group لتجبر الخوادم على تحديث الهوية الصوتية
-        if thumb_file_id:
-            media_group = [
-                types.InputMediaAudio(
-                    media=user_data[chat_id]["file_id"],
-                    thumbnail=thumb_file_id,
-                    title=final_title,
-                    performer=final_artist,
-                    caption=caption_text
-                )
-            ]
-            # إرسال المحتوى مباشرة للمستخدم مع كسر الكاش قسرياً وبسرية كاملة
-            sent_msgs = bot.send_media_group(chat_id=chat_id, media=media_group, timeout=300)
-            bot.delete_message(chat_id, status_msg.message_id)
-        else:
-            # في حال عدم وجود بوستر، يتم التعديل المباشر كملف صوتي نقي ومستقل للمستخدم
+        # تحميل الصورة إذا وُجدت
+        has_photo = False
+        if not is_skipped and message.photo:
+            photo_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_photo = bot.download_file(photo_info.file_path)
+            with open(photo_path, 'wb') as p_file:
+                p_file.write(downloaded_photo)
+            has_photo = True
+
+        # المعالجة وحقن البيانات داخل ملف الـ MP3 قسرياً كملف جديد
+        audiofile = eyed3.load(audio_path)
+        if audiofile.tag is None:
+            audiofile.initTag()
+        
+        audiofile.tag.title = final_title
+        audiofile.tag.artist = final_artist
+        
+        if has_photo:
+            with open(photo_path, "rb") as img_file:
+                audiofile.tag.images.set(ImageFrame.FRONT_COVER, img_file.read(), "image/jpeg")
+        
+        audiofile.tag.save()
+
+        # إرسال الملف الجديد المعدل بالكامل للمستخدم مباشرة
+        with open(audio_path, 'rb') as audio_to_send:
             bot.send_audio(
                 chat_id=chat_id,
-                audio=user_data[chat_id]["file_id"],
+                audio=audio_to_send,
                 title=final_title,
                 performer=final_artist,
                 caption=caption_text,
                 timeout=300
             )
-            bot.delete_message(chat_id, status_msg.message_id)
+
+        bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة الداخلية: {str(e)}", chat_id, status_msg.message_id)
     finally:
+        # تنظيف السيرفر وحذف الملفات المؤقتة فوراً لحفظ المساحة
+        if os.path.exists(audio_path): os.remove(audio_path)
+        if os.path.exists(photo_path): os.remove(photo_path)
         user_data.pop(chat_id, None)
 
 @bot.callback_query_handler(func=lambda call: True)
