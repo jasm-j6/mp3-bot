@@ -8,7 +8,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "السيرفر الملوكي المستقر يعمل بأعلى كفاءة! 🚀🎵"
+    return "المحرك السحابي الذكي يعمل بأعلى كفاءة وسرية تامة! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -132,7 +132,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري تطبيق الهندسة السحابية الحرة... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري معالجة وتحديث الحقوق سحابياً وبشكل سري... ⏳")
 
     try:
         final_title = user_data[chat_id].get("title") or user_data[chat_id]["orig_title"]
@@ -143,23 +143,35 @@ def get_photo(message):
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 الحل النهائي: الإرسال المباشر للقناة مع كافة البيانات والبوستر لتوليد كاش جديد حتماً
-        chan_msg = bot.send_audio(
-            chat_id=CHANNEL_USERNAME,
+        # 🚀 الإرسال المباشر للمستخدم لضمان السرية وعدم النشر في القناة نهائياً
+        sent_audio = bot.send_audio(
+            chat_id=chat_id,
             audio=user_data[chat_id]["file_id"],
-            thumb=thumb_file_id,
-            title=final_title,
-            performer=final_artist,
             caption=caption_text,
             timeout=300
         )
 
-        # تحويل الملف الفريش والمعدل فوراً إلى محادثة المستخدم وحذف رسالة الانتظار
-        bot.copy_message(chat_id=chat_id, from_chat_id=CHANNEL_USERNAME, message_id=chan_msg.message_id)
+        # 🛠️ كسر الكاش قسرياً للملفات الكبيرة: نقوم بتحديث الوسائط بالكامل فوراً في نفس رسالة المستخدم
+        bot.edit_message_media(
+            chat_id=chat_id,
+            message_id=sent_audio.message_id,
+            media=types.InputMediaAudio(
+                media=user_data[chat_id]["file_id"],
+                thumbnail=thumb_file_id,
+                title=final_title,
+                performer=final_artist,
+                caption=caption_text
+            )
+        )
+
         bot.delete_message(chat_id, status_msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}\n\nتأكد أن البوت مرفوع 'مشرف' داخل القناة ليعمل التعديل السحابي الفوري!", chat_id, status_msg.message_id)
+        # إذا كانت البيانات متطابقة تماماً، تليجرام سيعطي خطأ عادي، سنقوم بمسح رسالة الانتظار فقط لأن الملف وصل بالفعل للمستخدم
+        if "message is not modified" in str(e):
+            bot.delete_message(chat_id, status_msg.message_id)
+        else:
+            bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
 
