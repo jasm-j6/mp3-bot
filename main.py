@@ -3,13 +3,12 @@ from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
-import music_tag
 
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "المحرك السحابي الذكي يعمل بأعلى كفاءة واستقرار! 🚀🎵"
+    return "المحرك الحديدي FFmpeg يعمل بأعلى كفاءة واستقرار قسري! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -54,8 +53,8 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "مرحباً بك في النسخة السحابية المستقرة والمطورة! 🎧\n\n"
-        "ℹ️ **ملاحظة هامة:** البوت يعالج الآن الملفات حتى **20 ميجابايت** بأعلى كفاءة برمجية.\n\n"
+        "مرحباً بك في النسخة الفولاذية المعتمدة على FFmpeg! 🎧\n\n"
+        "ℹ️ **ملاحظة هامة:** البوت يعالج الملفات حتى **20 ميجابايت** ويصلح أي عيوب في ترميزها تلقائياً.\n\n"
         "🛠️ طـريـقـة الـعـمـل:\n"
         "1️⃣ أرسل الملف الصوتي (MP3) المراد تعديله هنا.\n"
         "2️⃣ أرسل العنوان الجديد، أو اضغط (تخطي).\n"
@@ -139,9 +138,10 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري المعالجة السحابية المتقدمة وحقن البيانات... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري المعالجة الحديدية عبر FFmpeg وتوليد ملف قياسي... ⏳")
 
-    audio_path = f"audio_{chat_id}.mp3"
+    input_audio = f"input_{chat_id}.mp3"
+    output_audio = f"output_{chat_id}.mp3"
     photo_path = f"thumb_{chat_id}.jpg"
 
     try:
@@ -149,13 +149,13 @@ def get_photo(message):
         final_artist = user_data[chat_id].get("artist") or user_data[chat_id]["orig_artist"]
         caption_text = f"🔥 {user_data[chat_id]['desc']}" if user_data[chat_id].get("desc") else f"✅ {DEFAULT_RIGHTS}"
         
-        # تحميل الملف الصوتي
+        # تحميل الملف الصوتي الأصلي
         file_info = bot.get_file(user_data[chat_id]["file_id"])
         downloaded_file = bot.download_file(file_info.file_path)
-        with open(audio_path, 'wb') as new_file:
+        with open(input_audio, 'wb') as new_file:
             new_file.write(downloaded_file)
 
-        # تحميل الصورة
+        # تحميل الصورة إذا وجدت
         has_photo = False
         if not is_skipped and message.photo:
             photo_info = bot.get_file(message.photo[-1].file_id)
@@ -164,35 +164,45 @@ def get_photo(message):
                 p_file.write(downloaded_photo)
             has_photo = True
 
-        # 🦾 معالجة مرنة وسهلة باستخدام music-tag لتفادي مشاكل الفريمات
-        f = music_tag.load_file(audio_path)
-        f['title'] = final_title
-        f['artist'] = final_artist
-        
+        # بناء أمر المعالجة لـ FFmpeg للتغلب على أي عيب في الفريمات الصوتية قسرياً
         if has_photo:
-            with open(photo_path, "rb") as img_file:
-                f['artwork'] = img_file.read()
-        
-        f.save()
-
-        # إرسال الملف المعدل والنهائي للمستخدم
-        with open(audio_path, 'rb') as audio_to_send:
-            bot.send_audio(
-                chat_id=chat_id,
-                audio=audio_to_send,
-                title=final_title,
-                performer=final_artist,
-                caption=caption_text,
-                timeout=300
+            cmd = (
+                f'ffmpeg -y -i "{input_audio}" -i "{photo_path}" -map 0:a -map 1:v '
+                f'-metadata title="{final_title}" -metadata artist="{final_artist}" '
+                f'-c:a copy -c:v mjpeg -id3v2_version 3 -metadata:s:v title="Album cover" '
+                f'-metadata:s:v comment="Cover (front)" "{output_audio}"'
             )
+        else:
+            cmd = (
+                f'ffmpeg -y -i "{input_audio}" -metadata title="{final_title}" '
+                f'-metadata artist="{final_artist}" -c:a copy "{output_audio}"'
+            )
+        
+        # تشغيل الأمر في نظام السيرفر
+        os.system(cmd)
 
-        bot.delete_message(chat_id, status_msg.message_id)
+        # التأكد من نجاح توليد الملف وإرساله
+        if os.path.exists(output_audio) and os.path.getsize(output_audio) > 0:
+            with open(output_audio, 'rb') as audio_to_send:
+                bot.send_audio(
+                    chat_id=chat_id,
+                    audio=audio_to_send,
+                    title=final_title,
+                    performer=final_artist,
+                    caption=caption_text,
+                    timeout=300
+                )
+            bot.delete_message(chat_id, status_msg.message_id)
+        else:
+            raise Exception("فشل FFmpeg في معالجة هذا الملف الصوتي المحدد.")
 
     except Exception as e:
-        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة القسرية: {str(e)}", chat_id, status_msg.message_id)
     finally:
-        if os.path.exists(audio_path): os.remove(audio_path)
-        if os.path.exists(photo_path): os.remove(photo_path)
+        # مسح كل الملفات المؤقتة فوراً لتنظيف السيرفر
+        for path in [input_audio, output_audio, photo_path]:
+            if os.path.exists(path):
+                os.remove(path)
         user_data.pop(chat_id, None)
 
 @bot.callback_query_handler(func=lambda call: True)
