@@ -3,14 +3,13 @@ from threading import Thread
 from flask import Flask
 import telebot
 from telebot import types
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, TIT2, TPE1, APIC
+import music_tag
 
 app = Flask("")
 
 @app.route("/")
 def home():
-    return "المحرك السحابي الفولاذي يعمل بنجاح! 🚀🎵"
+    return "المحرك السحابي الذكي يعمل بأعلى كفاءة واستقرار! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -165,29 +164,16 @@ def get_photo(message):
                 p_file.write(downloaded_photo)
             has_photo = True
 
-        # 🦾 المعالجة القوية باستخدام Mutagen والتأكد من وجود الـ ID3 Tags
-        try:
-            audio = MP3(audio_path, ID3=ID3)
-        except Exception:
-            audio = MP3(audio_path)
-            audio.add_tags()
-
-        # إدراج النصوص بترمييز UTF-8 المتوافق مع كل الأجهزة
-        audio.tags.add(TIT2(encoding=3, text=final_title))
-        audio.tags.add(TPE1(encoding=3, text=final_artist))
+        # 🦾 معالجة مرنة وسهلة باستخدام music-tag لتفادي مشاكل الفريمات
+        f = music_tag.load_file(audio_path)
+        f['title'] = final_title
+        f['artist'] = final_artist
         
-        # حقن البوستر داخل الملف
         if has_photo:
             with open(photo_path, "rb") as img_file:
-                audio.tags.add(APIC(
-                    encoding=3,
-                    mime='image/jpeg',
-                    type=3, # غلاف أمامي
-                    desc=u'Cover',
-                    data=img_file.read()
-                ))
+                f['artwork'] = img_file.read()
         
-        audio.save()
+        f.save()
 
         # إرسال الملف المعدل والنهائي للمستخدم
         with open(audio_path, 'rb') as audio_to_send:
