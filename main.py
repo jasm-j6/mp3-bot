@@ -8,7 +8,7 @@ app = Flask("")
 
 @app.route("/")
 def home():
-    return "المحرك السحابي الذكي يعمل بأعلى كفاءة وسرية تامة! 🚀🎵"
+    return "المحرك الملوكي السحابي يعمل بأعلى كفاءة وسرية تامة! 🚀🎵"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -51,15 +51,14 @@ def send_welcome(message):
         return
     bot.reply_to(
         message,
-        "مرحباً بك مجدداً! 🎧 البوت جاهز تماماً للعمل.\n\n"
+        "مرحباً بك مجدداً! 🎧 البوت جاهز تماماً للعمل السرّي والمعدل.\n\n"
         "🛠️ طـريـقـة الـعـمـل:\n"
         "1️⃣ أرسل الملف الصوتي (MP3) المراد تعديله هنا.\n"
         "2️⃣ أرسل العنوان الجديد، أو اضغط (تخطي) للإبقاء على الأصل.\n"
         "3️⃣ أرسل اسم الفنان (المطرب)، أو اضغط (تخطي).\n"
         "4️⃣ اكتب الحقوق أو الوصف النصي الذي تريده تحت الملف.\n"
         "5️⃣ أرسل غلاف الملف (الصورة المصغرة)، أو اضغط (تخطي).\n\n"
-        "🚀 سيتولى البوت المعالجة السحابية الفورية ويعيد إليك ملفك فخماً ومعدلاً في ثوانٍ!\n\n"
-        "بانتظار ملفك الصوتي الأول الآن... 📥"
+        "🚀 سيتولى البوت المعالجة السحابية الفورية ويعيد إليك ملفك معدلاً في ثوانٍ!"
     )
 
 @bot.message_handler(content_types=["audio", "document"])
@@ -132,7 +131,7 @@ def get_photo(message):
         bot.register_next_step_handler(message, get_photo)
         return
 
-    status_msg = bot.send_message(chat_id, "جاري معالجة وتحديث الحقوق سحابياً وبشكل سري... ⏳")
+    status_msg = bot.send_message(chat_id, "جاري معالجة وتحديث الحقوق سحابياً وبشكل سري تماماً... ⏳")
 
     try:
         final_title = user_data[chat_id].get("title") or user_data[chat_id]["orig_title"]
@@ -143,35 +142,35 @@ def get_photo(message):
         if not is_skipped and message.photo:
             thumb_file_id = message.photo[-1].file_id
 
-        # 🚀 الإرسال المباشر للمستخدم لضمان السرية وعدم النشر في القناة نهائياً
-        sent_audio = bot.send_audio(
-            chat_id=chat_id,
-            audio=user_data[chat_id]["file_id"],
-            caption=caption_text,
-            timeout=300
-        )
-
-        # 🛠️ كسر الكاش قسرياً للملفات الكبيرة: نقوم بتحديث الوسائط بالكامل فوراً في نفس رسالة المستخدم
-        bot.edit_message_media(
-            chat_id=chat_id,
-            message_id=sent_audio.message_id,
-            media=types.InputMediaAudio(
-                media=user_data[chat_id]["file_id"],
-                thumbnail=thumb_file_id,
-                title=final_title,
-                performer=final_artist,
-                caption=caption_text
-            )
-        )
-
-        bot.delete_message(chat_id, status_msg.message_id)
-
-    except Exception as e:
-        # إذا كانت البيانات متطابقة تماماً، تليجرام سيعطي خطأ عادي، سنقوم بمسح رسالة الانتظار فقط لأن الملف وصل بالفعل للمستخدم
-        if "message is not modified" in str(e):
+        # 🚀 الاستراتيجية الحاسمة لكسر الكاش قسرياً وبأمان كامل:
+        # إذا وجد بوستر، نرسل الملف كـ Media Group لتجبر الخوادم على تحديث الهوية الصوتية
+        if thumb_file_id:
+            media_group = [
+                types.InputMediaAudio(
+                    media=user_data[chat_id]["file_id"],
+                    thumbnail=thumb_file_id,
+                    title=final_title,
+                    performer=final_artist,
+                    caption=caption_text
+                )
+            ]
+            # إرسال المحتوى مباشرة للمستخدم مع كسر الكاش قسرياً وبسرية كاملة
+            sent_msgs = bot.send_media_group(chat_id=chat_id, media=media_group, timeout=300)
             bot.delete_message(chat_id, status_msg.message_id)
         else:
-            bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
+            # في حال عدم وجود بوستر، يتم التعديل المباشر كملف صوتي نقي ومستقل للمستخدم
+            bot.send_audio(
+                chat_id=chat_id,
+                audio=user_data[chat_id]["file_id"],
+                title=final_title,
+                performer=final_artist,
+                caption=caption_text,
+                timeout=300
+            )
+            bot.delete_message(chat_id, status_msg.message_id)
+
+    except Exception as e:
+        bot.edit_message_text(f"❌ حدثت مشكلة أثناء المعالجة: {str(e)}", chat_id, status_msg.message_id)
     finally:
         user_data.pop(chat_id, None)
 
